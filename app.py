@@ -337,7 +337,13 @@ def buscar_productos():
     return jsonify(productos_json)
 
 @app.route('/cotizaciones_dashboard')
+def cotizaciones_dashboard():
+    return render_template('cotizaciones_dashboard.html')
+
 @app.route('/verificacion_cotizacion')
+def verificacion_cotizacion():
+    return render_template('verificacion_cotizacion.html')
+
 @app.route('/guardar_cotizacion', methods=['POST'])
 def guardar_cotizacion():
     datos = request.json
@@ -372,8 +378,6 @@ def guardar_cotizacion():
     db.session.commit()
 
     return jsonify({'mensaje': 'Cotización guardada exitosamente'}), 201
-
-@app.route('/cotizaciones', methods=['GET'])
 
 @app.route('/cotizacion/<int:id>', methods=['GET'])
 def obtener_cotizacion(id):
@@ -416,12 +420,34 @@ def obtener_cotizacion(id):
 
     return jsonify(cotizacion_data)
 
+@app.route('/cotizaciones', methods=['GET'])
+def obtener_todas_las_cotizaciones():
+    cotizaciones = Cotizacion.query.all()
+    cotizaciones_data = [
+        {
+            'id': cotizacion.id,
+            'cliente': cotizacion.cliente,
+            'ruc': cotizacion.ruc,
+            'fecha': cotizacion.fecha,
+            'email': cotizacion.email,
+            'estado': cotizacion.estado,
+            'creado_por': db.session.get(Usuario, cotizacion.creado_por).nombre_usuario if db.session.get(Usuario, cotizacion.creado_por) else 'Desconocido'
+        }
+        for cotizacion in cotizaciones
+    ]
+    return jsonify(cotizaciones_data)
+
 
 @app.route('/transformar_orden_venta/<int:cotizacion_id>', methods=['POST'])
 def transformar_orden_venta(cotizacion_id):
     cotizacion = Cotizacion.query.get(cotizacion_id)
     if not cotizacion:
         return jsonify({'mensaje': 'Cotización no encontrada'}), 404
+
+    # Obtener datos del request
+    datos = request.get_json()
+    if not datos or 'productos' not in datos:
+        return jsonify({'mensaje': 'Datos inválidos'}), 400
 
     # Crear nueva orden de Venta con los datos de la cotización
     nueva_orden = OrdenVenta(
@@ -489,7 +515,7 @@ def obtener_ordenes_venta():
     output = []
 
     for orden in ordenes:
-        creador = Usuario.query.get(orden.creado_por)
+        creador = db.session.get(Usuario, orden.creado_por)  # Corrección aquí
         orden_data = {
             'id': orden.id,
             'cliente': orden.cliente,
@@ -514,7 +540,7 @@ def obtener_orden(orden_id):
 
     productos = []
     for producto in orden.productos:
-        producto_obj = session.get(Producto, producto.producto_id)
+        producto_obj = db.session.get(Producto, producto.producto_id)
         nombre_producto = producto_obj.nombre if producto_obj else "Producto no encontrado"
         stock_producto = producto_obj.stock if producto_obj else "No disponible"
 
@@ -666,15 +692,40 @@ def obtener_productos_remision(orden_id):
 
 
 @app.route('/ordenes_venta_guias', methods=['GET'])
+def obtener_ordenes_venta_guias():
+    # Aquí aseguramos que número de guía venga en la solicitud
+    numero_guia = request.args.get('numero_guia')  # Obtener el número de guía de los parámetros de URL
+    if not numero_guia:
+        return jsonify({'error': 'Número de guía requerido'}), 400
+
+    # Buscar la guía de remisión en la base de datos
+    guia = GuiaRemision.query.filter_by(numero_guia=numero_guia).first()
+    if not guia:
+        return jsonify({'error': 'Guía no encontrada'}), 404
+
+    # Obtener los productos asociados a la guía
+    productos = [
+        {
+            'id': producto.id,
+            'nombre': producto.producto.nombre,  # Aquí accedemos a 'producto.nombre' a través de la relación
+            'cantidad': producto.cantidad,
+            'estado': producto.estado  # Usamos 'estado' en lugar de 'entregado'
+        }
+        for producto in guia.productos  # Iteramos sobre los productos de la guía
+    ]
+
+    return jsonify({
+        'numero_guia': guia.numero_guia,
+        'estado': guia.estado,
+        'productos': productos
+    })
+
 @app.route('/orden_venta/<int:orden_id>/productos', methods=['GET'])
     
 @app.route('/obtener_detalle_guia/<numero_guia>', methods=['GET'])
 def obtener_detalle_guia(numero_guia):
-
     if not numero_guia:
-
         return jsonify({'error': 'Número de guía inválido'}), 400
-
 
     guia = GuiaRemision.query.get(numero_guia)
     if not guia:
