@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inicio de Sesión</title>
+    <!-- Enlace a Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body,
+        html {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f8f9fa;
+        }
+
+        .login-container {
+            max-width: 400px;
+            width: 100%;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+
+        .login-container h1 {
+            margin-bottom: 20px;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        .login-container .form-group {
+            margin-bottom: 15px;
+        }
+
+        .login-container button {
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="login-container">
+        <h1>Inicio de Sesión</h1>
+        <form method="POST" action="/login">
+            <div class="form-group">
+                <label for="nombre_usuario">Nombre de Usuario:</label>
+                <input type="text" class="form-control" id="nombre_usuario" name="nombre_usuario" required>
+            </div>
+            <div class="form-group">
+                <label for="contraseña">Contraseña:</label>
+                <input type="password" class="form-control" id="contraseña" name="contraseña" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Ingresar</button>
+        </form>
+    </div>
+
+    <!-- jQuery y Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+
+</html>

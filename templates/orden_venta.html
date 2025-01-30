@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Órdenes de Venta</title>
+    <!-- Cargar Bootstrap desde CDN -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>Órdenes de Venta</h1>
+        <!-- Tabla principal para mostrar las órdenes de venta -->
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Cliente</th>
+                    <th>Solicitante</th>
+                    <th>Fecha</th>
+                    <th>Email</th>
+                    <th>Estado</th>
+                    <th>Creado por</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="ordenes-lista">
+                <!-- Órdenes cargadas dinámicamente -->
+            </tbody>
+        </table>
+    </div>
+
+    <div class="modal fade" id="detalleOrdenModal" tabindex="-1" role="dialog" aria-labelledby="detalleOrdenModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="detalleOrdenModalLabel">Detalle de Orden de Venta</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <!-- Tabla de productos en la orden de venta -->
+                    <h5>Productos en esta orden</h5>
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Cantidad en Stock</th>
+                                <th>Cantidad para la Orden</th>
+                                <th>Cantidad ya Incluida en la Guía</th> 
+                                <th>Cantidad a Incluir en la Guía</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productos-orden-lista">
+                            <!-- Productos de la orden de Venta cargados dinámicamente -->
+                        </tbody>
+                    </table>
+
+                    <!-- Sección para gestionar guías de remisión -->
+                    <div>
+                        <!-- Formulario para crear nueva Guía de Remisión -->
+                        <h5>Crear Guía de Remisión</h5>
+                        <form id="formGuiaRemision">
+                            <div class="form-group">
+                                <label for="numeroGuia">Número de Guía:</label>
+                                <input type="text" class="form-control" id="numeroGuia" placeholder="Número de Guía" required>
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="generarGuiaRemision()">Crear Guía de Remisión</button>
+                        </form>
+
+                        
+                        <!-- Tabla para mostrar las guías de remisión ya creadas -->
+                        <h5>Guías de Remisión Existentes</h5>
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Número de Guía</th>
+                                    <th>Fecha Emisión</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th> <!-- Nueva columna para el botón de ver detalle -->
+                                </tr>
+                            </thead>
+                            <tbody id="lista-guias-remision">
+                                <!-- Las guías serán cargadas dinámicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cargar jQuery y Bootstrap desde CDN -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <!-- Archivo JS personalizado -->
+    <script src="{{ url_for('static', filename='orden_venta.js') }}"></script>
+</body>
+
+</html>
