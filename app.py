@@ -40,6 +40,7 @@ migrate = Migrate(app, db)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
 app = create_app()
 
 class Usuario(UserMixin, db.Model):
@@ -181,7 +182,6 @@ def gerente_dashboard():
     return render_template('gerente_dashboard.html')
 
 def gerente_dashboard():
-
     return render_template('gerente_dashboard.html')
 
 
@@ -197,11 +197,9 @@ def orden_venta():
 def trabajador_dashboard():
     return render_template('trabajador_dashboard.html')
 
-
 @app.route('/cliente_dashboard')
 def cliente_dashboard():
     return render_template('cliente_dashboard.html')
-
 
 @app.route('/productos', methods=['POST'])
 def crear_producto():
