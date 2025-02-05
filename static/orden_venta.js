@@ -110,11 +110,23 @@ $(document).ready(function () {
     function actualizarCantidadesRemisionadas(productosRemisionados) {
         $('#productos-orden-lista tr').each(function () {
             const productoId = $(this).data('producto-id');
-            const cantidadRemisionada = productosRemisionados[productoId] || 0;
-            $(this).find('td').eq(3).text(cantidadRemisionada);  // Actualiza la columna de cantidad remitida
-            $(this).find('.cantidad-seleccionada').attr('max', $(this).find('td').eq(2).text() - cantidadRemisionada);  // Ajusta el max según la cantidad remitida
+            const totalRemitido = productosRemisionados[productoId] 
+                ? productosRemisionados[productoId].cantidad_total - productosRemisionados[productoId].cantidad_pendiente 
+                : 0; // Si no hay cantidad remitida, usar 0
+
+            console.log(`Producto ID ${productoId}, Cantidad Remitida Total desde backend: ${totalRemitido}`);
+
+            $(this).find('td').eq(3).text(totalRemitido);  // Actualiza la columna de cantidad ya incluida en la Guía
+            const cantidadMax = $(this).find('td').eq(2).text() - totalRemitido;
+            $(this).find('.cantidad-seleccionada').attr('max', cantidadMax);  // Ajusta el max según la cantidad remitida
+
+            if (cantidadMax <= 0) {
+                $(this).find('.cantidad-seleccionada').prop('disabled', true);
+            }
         });
     }
+
+
 
     // Obtener las guías de remisión asociadas a la orden
     function obtenerGuiasRemision(ordenId) {
@@ -158,7 +170,6 @@ $(document).ready(function () {
         const numeroGuia = $('#numeroGuia').val();
         const productos = [];
 
-        // Recorremos cada fila de la tabla de productos
         $('#productos-orden-lista tr').each(function () {
             const productoId = $(this).data('producto-id');
             const cantidadSeleccionada = $(this).find('.cantidad-seleccionada').val();
@@ -171,6 +182,8 @@ $(document).ready(function () {
             }
         });
 
+        console.log("Productos enviados para la guía:", productos);
+
         if (productos.length === 0) {
             alert('Debe seleccionar al menos un producto para generar la guía de remisión.');
             return;
@@ -180,7 +193,6 @@ $(document).ready(function () {
             return;
         }
 
-        // Enviar datos al backend
         $.ajax({
             url: `/orden_venta/${window.currentOrdenId}/guias_remision`,
             method: 'POST',

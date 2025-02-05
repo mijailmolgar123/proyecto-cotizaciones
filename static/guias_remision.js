@@ -23,58 +23,57 @@ window.eliminarGuia = function(numeroGuia) {
 
 function cargarOrdenesYGuias() {
         $.ajax({
-            url: '/ordenes_venta_guias',  // Ruta que devolverá las órdenes de venta con sus guías de remisión
-            method: 'GET',
-            success: function(ordenes) {
-                let tbody = $('#ordenes-lista');
-                tbody.empty();
+        url: '/ordenes_venta_guias',  // Asegurar que no se pase un numero_guia vacío
+        method: 'GET',
+        success: function(ordenes) {
+            let tbody = $('#ordenes-lista');
+            tbody.empty();
 
-                ordenes.forEach(function(orden) {
-                    // Fila para la orden de venta
-                    let ordenRow = `
-                        <tr>
-                            <td>${orden.id}</td>
-                            <td>${orden.cliente}</td>
-                            <td>${orden.fecha}</td>
-                            <td>${orden.total}</td>
-                            <td><button class="btn btn-info" onclick="mostrarGuias(${orden.id})">Ver Guías</button></td>
-                        </tr>
-                    `;
-                    tbody.append(ordenRow);
+            ordenes.forEach(function(orden) {
+                let ordenRow = `
+                    <tr>
+                        <td>${orden.id}</td>
+                        <td>${orden.cliente}</td>
+                        <td>${orden.fecha}</td>
+                        <td>${orden.total}</td>
+                        <td><button class="btn btn-info" onclick="mostrarGuias(${orden.id})">Ver Guías</button></td>
+                    </tr>
+                `;
+                tbody.append(ordenRow);
 
-                    // Fila para las guías de remisión asociadas a la orden
-                    if (orden.guias && orden.guias.length > 0) {
-                        orden.guias.forEach(function (guia) {
-                            console.log("Numero de Guia:", guia.numero_guia);
-                            let guiaRow = `
-                                <tr class="guia-row" data-orden-id="${orden.id}" style="display:none;">  <!-- Asegúrate de que las guías estén ocultas inicialmente -->
-                                    <td colspan="2">Guía #${guia.numero_guia}</td>
-                                    <td>${guia.fecha_emision}</td>
-                                    <td>${guia.estado}</td>
-                                    <td>
-                                        <button class="btn btn-primary" onclick="verDetalleGuia('${guia.numero_guia}')">Ver</button>
-                                        <button class="btn btn-warning" onclick="editarGuia(${guia.numero_guia})">Editar</button>
-                                        <button class="btn btn-danger" onclick="eliminarGuia(${guia.numero_guia})">Eliminar</button>
-                                    </td>
-                                </tr>
-                            `;
-                            tbody.append(guiaRow);
-                        });
-                    } else {
-                        let noGuiasRow = `
-                            <tr class="guia-row" data-orden-id="${orden.id}">
-                                <td colspan="5">No hay guías de remisión asociadas a esta orden.</td>
+                if (orden.guias && orden.guias.length > 0) {
+                    orden.guias.forEach(function (guia) {
+                        console.log("Número de Guía:", guia.numero_guia);
+                        let guiaRow = `
+                            <tr class="guia-row" data-orden-id="${orden.id}" style="display:none;">
+                                <td colspan="2">Guía #${guia.numero_guia}</td>
+                                <td>${guia.fecha_emision}</td>
+                                <td>${guia.estado}</td>
+                                <td>
+                                    <button class="btn btn-primary" onclick="verDetalleGuia('${guia.numero_guia}')">Ver</button>
+                                    <button class="btn btn-warning" onclick="editarGuia(${guia.numero_guia})">Editar</button>
+                                    <button class="btn btn-danger" onclick="eliminarGuia(${guia.numero_guia})">Eliminar</button>
+                                </td>
                             </tr>
                         `;
-                        tbody.append(noGuiasRow);
-                    }
-                });
-            },
-            error: function(error) {
-                console.error('Error al cargar las órdenes de venta y guías:', error);
-                alert('Hubo un error al cargar las órdenes de venta y guías de remisión.');
-            }
-        });
+                        tbody.append(guiaRow);
+                    });
+                } else {
+                    let noGuiasRow = `
+                        <tr class="guia-row" data-orden-id="${orden.id}">
+                            <td colspan="5">No hay guías de remisión asociadas a esta orden.</td>
+                        </tr>
+                    `;
+                    tbody.append(noGuiasRow);
+                }
+            });
+        },
+        error: function(error) {
+            console.error('Error al cargar las órdenes de venta y guías:', error);
+            alert('Hubo un error al cargar las órdenes de venta y guías de remisión.');
+        }
+    });
+
 }
 $(document).ready(function () {
     cargarOrdenesYGuias();

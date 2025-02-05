@@ -165,12 +165,12 @@ class GuiaRemision(db.Model):
 class ProductoGuiaRemision(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     guia_remision_id = db.Column(db.Integer, db.ForeignKey('guia_remision.id', ondelete='CASCADE'), nullable=False)
-    producto_id = db.Column(db.Integer, db.ForeignKey('producto.id'), nullable=False)
+    producto_orden_id = db.Column(db.Integer, db.ForeignKey('producto_orden.id'), nullable=False)  # Nueva relación
     cantidad = db.Column(db.Integer, nullable=False)
     estado = db.Column(db.String(20), nullable=False, default='Pendiente')
     activo = db.Column(db.Boolean, default=True)
+    producto_orden = db.relationship('ProductoOrden', backref='productos_guias')
 
-    producto = db.relationship('Producto')
 
 # Método para registrar una actividad
 @app.route('/')
@@ -395,7 +395,7 @@ def obtener_cotizacion(id):
     productos = [
         {
             'id': producto.producto_id,
-            'nombre': db.session.query(Producto).get(producto.producto_id).nombre if db.session.query(Producto).get(producto.producto_id) else "Producto no encontrado",
+            'nombre': db.session.get(Producto, producto.producto_id).nombre if db.session.get(Producto, producto.producto_id) else "Producto no encontrado",
             'precio_unitario': producto.precio_unitario,
             'cantidad': producto.cantidad,
             'precio_total': producto.precio_total
@@ -404,7 +404,7 @@ def obtener_cotizacion(id):
     ]
 
     # Obtener el creador de la cotización
-    creador = db.session.query(Usuario).get(cotizacion.creado_por)
+    creador = db.session.get(Usuario, cotizacion.creado_por)
     
     # Construir la respuesta
     cotizacion_data = {
@@ -440,7 +440,7 @@ def obtener_todas_las_cotizaciones():
 
 @app.route('/transformar_orden_venta/<int:cotizacion_id>', methods=['POST'])
 def transformar_orden_venta(cotizacion_id):
-    cotizacion = Cotizacion.query.get(cotizacion_id)
+    cotizacion = db.session.get(Cotizacion, cotizacion_id)
     if not cotizacion:
         return jsonify({'mensaje': 'Cotización no encontrada'}), 404
 
@@ -626,24 +626,35 @@ def crear_guia_remision(orden_id):
             estado='Pendiente'
         )
         db.session.add(nueva_guia)
-        db.session.commit()
+        db.session.commit()  # Guardamos para obtener el ID
+
+        app.logger.info(f"Guía creada: ID {nueva_guia.id}, Número: {nueva_guia.numero_guia}, Orden: {nueva_guia.orden_venta_id}")
 
         for producto in productos:
+            producto_id = producto.get('id')
+            cantidad = producto.get('cantidad')
+
+            if not producto_id or not cantidad:
+                app.logger.error(f"Datos incorrectos en producto: {producto}")
+                continue  # Saltar productos inválidos
+
             nuevo_producto_guia = ProductoGuiaRemision(
                 guia_remision_id=nueva_guia.id,
-                producto_id=producto['id'],
-                cantidad=producto['cantidad'],
+                producto_orden_id=producto_id,  # Reemplaza 'producto_id' por 'producto_orden_id' si es necesario
+                cantidad=cantidad,
                 estado='Pendiente'
             )
             db.session.add(nuevo_producto_guia)
+
+            app.logger.info(f"Producto agregado a la guía {nueva_guia.id}: Producto {producto_id}, Cantidad {cantidad}")
 
         db.session.commit()
         return jsonify({'mensaje': 'Guía de remisión creada correctamente'}), 201
 
     except Exception as e:
         db.session.rollback()
+        app.logger.error(f"Error al crear la guía: {str(e)}")
         return jsonify({'mensaje': f'Ocurrió un error al crear la guía de remisión: {str(e)}'}), 500
-
 
 
 @app.route('/productos/<int:producto_id>/stock', methods=['GET'])
@@ -662,7 +673,7 @@ def obtener_stock_producto(producto_id):
         'cantidad_a_pedir': cantidad_a_pedir
     })
 
-@app.route('/orden_venta/<int:orden_id>/guias_remision', methods=['GET'])
+
 @app.route('/orden_venta/<int:orden_id>/guias_remision', methods=['GET'])
 def obtener_guias_remision(orden_id):
     guias = GuiaRemision.query.filter_by(orden_venta_id=orden_id).all()
@@ -679,46 +690,75 @@ def obtener_guias_remision(orden_id):
 
 @app.route('/orden_venta/<int:orden_id>/productos_remision', methods=['GET'])
 def obtener_productos_remision(orden_id):
-    guias = GuiaRemision.query.filter_by(orden_venta_id=orden_id).all()
+    productos_orden = ProductoOrden.query.filter_by(orden_id=orden_id).all()
     productos_suma = {}
-    for guia in guias:
-        for producto in guia.productos:
-            if producto.producto_id in productos_suma:
-                productos_suma[producto.producto_id] += producto.cantidad
-            else:
-                productos_suma[producto.producto_id] = producto.cantidad
+
+    for producto in productos_orden:
+        total_remitido = db.session.query(
+            db.func.sum(ProductoGuiaRemision.cantidad)
+        ).filter_by(producto_orden_id=producto.id).scalar() or 0  # Asegurar que si es None, sea 0
+
+        # Obtener el producto manualmente
+        producto_info = Producto.query.get(producto.producto_id)
+
+        productos_suma[producto.id] = {
+            "nombre": producto_info.nombre if producto_info else "Producto no encontrado",
+            "cantidad_total": producto.cantidad,
+            "cantidad_pendiente": max(0, producto.cantidad - total_remitido),
+        }
+
+    print(f"DEBUG: Datos enviados en productos_remision: {productos_suma}")  # Agregar log
 
     return jsonify(productos_suma), 200
 
 
 @app.route('/ordenes_venta_guias', methods=['GET'])
 def obtener_ordenes_venta_guias():
-    # Aquí aseguramos que número de guía venga en la solicitud
-    numero_guia = request.args.get('numero_guia')  # Obtener el número de guía de los parámetros de URL
-    if not numero_guia:
-        return jsonify({'error': 'Número de guía requerido'}), 400
+    numero_guia = request.args.get('numero_guia')
 
-    # Buscar la guía de remisión en la base de datos
-    guia = GuiaRemision.query.filter_by(numero_guia=numero_guia).first()
-    if not guia:
-        return jsonify({'error': 'Guía no encontrada'}), 404
+    if numero_guia:
+        guia = GuiaRemision.query.filter_by(numero_guia=numero_guia).first()
+        if not guia:
+            return jsonify({'error': 'Guía no encontrada'}), 404
 
-    # Obtener los productos asociados a la guía
-    productos = [
-        {
-            'id': producto.id,
-            'nombre': producto.producto.nombre,  # Aquí accedemos a 'producto.nombre' a través de la relación
-            'cantidad': producto.cantidad,
-            'estado': producto.estado  # Usamos 'estado' en lugar de 'entregado'
-        }
-        for producto in guia.productos  # Iteramos sobre los productos de la guía
-    ]
+        productos = [
+            {
+                'id': producto.id,
+                'nombre': producto.producto.nombre,
+                'cantidad': producto.cantidad,
+                'estado': producto.estado
+            }
+            for producto in guia.productos
+        ]
 
-    return jsonify({
-        'numero_guia': guia.numero_guia,
-        'estado': guia.estado,
-        'productos': productos
-    })
+        return jsonify({
+            'numero_guia': guia.numero_guia,
+            'estado': guia.estado,
+            'productos': productos
+        })
+
+    # Si no se proporciona número de guía, devolver todas las órdenes con guías
+    ordenes = OrdenVenta.query.all()
+    resultado = []
+    
+    for orden in ordenes:
+        guias = GuiaRemision.query.filter_by(orden_venta_id=orden.id).all()
+        resultado.append({
+            'id': orden.id,
+            'cliente': orden.cliente,
+            'fecha': orden.fecha,
+            'total': sum([producto.cantidad for producto in orden.productos]), 
+            'guias': [
+                {
+                    'numero_guia': guia.numero_guia,
+                    'fecha_emision': guia.fecha_emision,
+                    'estado': guia.estado
+                }
+                for guia in guias
+            ]
+        })
+
+    return jsonify(resultado)
 
 @app.route('/orden_venta/<int:orden_id>/productos', methods=['GET'])
     
