@@ -5,8 +5,8 @@ body {
 }
 
 .container {
-    max-width: 600px;
-    margin: 0 auto;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 .login-buttons button {
@@ -16,4 +16,51 @@ body {
     margin: 10px 0;
     font-size: 18px;
     cursor: pointer;
+}
+
+.back-button {
+    position: fixed;
+    /* Se fija en la pantalla sin alterar el diseño */
+    top: 15px;
+    left: 15px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    /* Asegura que la flecha sea visible */
+    text-decoration: none;
+    color: white;
+    /* Asegura que la flecha sea blanca */
+    background: #333;
+    /* Fondo oscuro */
+    border-radius: 50%;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+    z-index: 9999;
+    cursor: pointer;
+    border: none;
+}
+
+/* Cambio de color al pasar el mouse */
+.back-button:hover {
+    background: #555;
+}
+
+/* Asegurar que haya una flecha dentro del botón */
+.back-button::before {
+    content: "←";
+    /* Agrega la flecha */
+    font-weight: bold;
+    color: white;
+    /* Asegura que la flecha sea visible */
+}
+
+/* Asegurar que el body no se expanda */
+html,
+body {
+    overflow-x: hidden;
+    overflow-y: auto;
+    margin: 0;
+    padding: 0;
 }
