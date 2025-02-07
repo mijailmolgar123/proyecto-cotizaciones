@@ -675,24 +675,32 @@ def obtener_guias_remision(orden_id):
 
 @app.route('/orden_venta/<int:orden_id>/productos_remision', methods=['GET'])
 def obtener_productos_remision(orden_id):
+    print(f"📡 Recibida solicitud para obtener productos remitidos de la orden {orden_id}")
+
     productos_orden = ProductoOrden.query.filter_by(orden_id=orden_id).all()
     productos_suma = {}
 
     for producto in productos_orden:
-        total_remitido = db.session.query(
-            db.func.sum(ProductoGuiaRemision.cantidad)
-        ).filter_by(producto_orden_id=producto.id).scalar() or 0  # Asegurar que si es None, sea 0
+        total_remitido = (
+            db.session.query(db.func.sum(ProductoGuiaRemision.cantidad))
+            .filter(ProductoGuiaRemision.producto_orden_id == producto.id)
+            .scalar()
+            or 0
+        )
 
-        # Obtener el producto manualmente
         producto_info = Producto.query.get(producto.producto_id)
 
         productos_suma[producto.id] = {
             "nombre": producto_info.nombre if producto_info else "Producto no encontrado",
             "cantidad_total": producto.cantidad,
             "cantidad_pendiente": max(0, producto.cantidad - total_remitido),
+            "cantidad_remitida": total_remitido,
         }
 
-    print(f"DEBUG: Datos enviados en productos_remision: {productos_suma}")  # Agregar log
+        print(
+            f"Producto_Orden_ID {producto.id} -> Cantidad Orden: {producto.cantidad}, "
+            f"Cantidad Remitida: {total_remitido}, Pendiente: {productos_suma[producto.id]['cantidad_pendiente']}"
+        )
 
     return jsonify(productos_suma), 200
 

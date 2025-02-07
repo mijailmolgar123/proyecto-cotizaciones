@@ -42,6 +42,8 @@ $(document).ready(function () {
 
     // Función para obtener el detalle de la orden seleccionada
     window.verDetalleOrden = function (id) {
+        console.log(` Cargando detalles de la orden ${id}`);
+
         limpiarDetalleOrden();
 
         $.ajax({
@@ -50,15 +52,20 @@ $(document).ready(function () {
             success: function (orden) {
                 window.currentOrdenId = id;
                 mostrarProductosOrden(orden.productos);
-                obtenerGuiasRemision(id); // Ahora también obtendrá los detalles de las guías
+                obtenerGuiasRemision(id); 
+                
+                console.log(" Llamando a obtenerProductosRemisionados...");
+                obtenerProductosRemisionados(id);  // <- Esto asegura que se ejecute
+
                 $('#detalleOrdenModal').modal('show');
             },
             error: function (error) {
-                console.error("Error al obtener los detalles de la orden de Venta:", error);
+                console.error(" Error al obtener los detalles de la orden de Venta:", error);
                 alert("Hubo un error al obtener los detalles de la orden de Venta.");
             }
         });
     };
+
 
 
     // Mostrar los productos de la orden en la tabla
@@ -84,47 +91,55 @@ $(document).ready(function () {
 
     // Obtener los productos remitidos para la orden de venta
     function obtenerProductosRemisionados(ordenId) {
+        console.log(`📡 Intentando obtener productos remitidos de: /orden_venta/${ordenId}/productos_remision`);  // Log de depuración
+
         $.ajax({
             url: `/orden_venta/${ordenId}/productos_remision`,
             method: 'GET',
             success: function (productosRemisionados) {
+                console.log(" Datos recibidos de productos remitidos:", productosRemisionados);
                 if (Object.keys(productosRemisionados).length === 0) {
-                    console.warn('No se encontraron productos remitidos para esta orden.');
+                    console.warn(' No se encontraron productos remitidos para esta orden.');
                 }
                 actualizarCantidadesRemisionadas(productosRemisionados);
             },
             error: function (err) {
-                if (err.status === 404) {
-                    console.warn('No se encontraron productos remitidos para esta orden.');
-                    actualizarCantidadesRemisionadas({});  // Pasar un objeto vacío si no hay remitidos
-                } else {
-                    console.error('Error al obtener productos remitidos:', err);
-                }
+                console.error(' Error al obtener productos remitidos:', err);
             }
         });
     }
 
 
+
     // Actualizar la tabla con las cantidades remitidas
     function actualizarCantidadesRemisionadas(productosRemisionados) {
+        console.log("Productos remitidos recibidos:", productosRemisionados);
+
         $('#productos-orden-lista tr').each(function () {
             const productoId = $(this).data('producto-id');
-            const totalRemitido = productosRemisionados[productoId] 
-                ? productosRemisionados[productoId].cantidad_total - productosRemisionados[productoId].cantidad_pendiente 
-                : 0; // Si no hay cantidad remitida, usar 0
+            const cantidadTotalOrden = parseInt($(this).find('td').eq(2).text()); // Cantidad total en la orden
 
-            console.log(`Producto ID ${productoId}, Cantidad Remitida Total desde backend: ${totalRemitido}`);
+            const totalRemitido = productosRemisionados[productoId]
+                ? productosRemisionados[productoId].cantidad_remitida  // Ahora usa la cantidad correcta del backend
+                : 0;
 
-            $(this).find('td').eq(3).text(totalRemitido);  // Actualiza la columna de cantidad ya incluida en la Guía
-            const cantidadMax = $(this).find('td').eq(2).text() - totalRemitido;
-            $(this).find('.cantidad-seleccionada').attr('max', cantidadMax);  // Ajusta el max según la cantidad remitida
+            console.log(
+                `Producto_Orden_ID ${productoId} -> Total en Orden: ${cantidadTotalOrden}, `
+                + `Cantidad Remitida: ${totalRemitido}`
+            );
+
+            $(this).find('td').eq(3).text(totalRemitido);
+
+            const cantidadMax = cantidadTotalOrden - totalRemitido;
+            console.log(`Producto ID ${productoId} -> Máximo Permitido en Nueva Guía: ${cantidadMax}`);
+
+            $(this).find('.cantidad-seleccionada').attr('max', cantidadMax);
 
             if (cantidadMax <= 0) {
                 $(this).find('.cantidad-seleccionada').prop('disabled', true);
             }
         });
     }
-
 
 
     // Obtener las guías de remisión asociadas a la orden
@@ -181,11 +196,20 @@ $(document).ready(function () {
         const numeroGuia = $('#numeroGuia').val();
         const productos = [];
 
+        let errorExceso = false;
+
         $('#productos-orden-lista tr').each(function () {
             const productoId = $(this).data('producto-id');
-            const cantidadSeleccionada = $(this).find('.cantidad-seleccionada').val();
+            const cantidadSeleccionada = parseInt($(this).find('.cantidad-seleccionada').val());
+            const cantidadMax = parseInt($(this).find('.cantidad-seleccionada').attr('max'));
 
-            if (productoId && cantidadSeleccionada > 0) {
+            if (cantidadSeleccionada > 0) {
+                if (cantidadSeleccionada > cantidadMax) {
+                    errorExceso = true;
+                    alert(`Error: La cantidad ingresada para el producto con ID ${productoId} supera el máximo permitido (${cantidadMax}).`);
+                    return false;  // Detener el bucle
+                }
+
                 productos.push({
                     id: productoId,
                     cantidad: cantidadSeleccionada
@@ -193,7 +217,7 @@ $(document).ready(function () {
             }
         });
 
-        console.log("Productos enviados para la guía:", productos);
+        if (errorExceso) return;  // Evitar el envío si hay errores
 
         if (productos.length === 0) {
             alert('Debe seleccionar al menos un producto para generar la guía de remisión.');
@@ -222,6 +246,7 @@ $(document).ready(function () {
             }
         });
     };
+
 
     // Función para obtener el detalle de la guía de remisión
     window.verDetalleGuia = function (idGuia) {
