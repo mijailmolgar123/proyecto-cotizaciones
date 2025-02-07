@@ -42,17 +42,15 @@ $(document).ready(function () {
 
     // Función para obtener el detalle de la orden seleccionada
     window.verDetalleOrden = function (id) {
-        limpiarDetalleOrden(); 
+        limpiarDetalleOrden();
 
-        // Obtener los detalles de la orden de venta
         $.ajax({
-            url: `/orden_venta/${id}`,  
+            url: `/orden_venta/${id}`,
             method: 'GET',
             success: function (orden) {
                 window.currentOrdenId = id;
                 mostrarProductosOrden(orden.productos);
-                obtenerProductosRemisionados(id); // Cargar productos remitidos
-                obtenerGuiasRemision(id);         // Cargar guías de remisión
+                obtenerGuiasRemision(id); // Ahora también obtendrá los detalles de las guías
                 $('#detalleOrdenModal').modal('show');
             },
             error: function (error) {
@@ -61,6 +59,7 @@ $(document).ready(function () {
             }
         });
     };
+
 
     // Mostrar los productos de la orden en la tabla
     function mostrarProductosOrden(productos) {
@@ -148,22 +147,34 @@ $(document).ready(function () {
     }
 
     // Mostrar las guías de remisión en la tabla correspondiente
+    // Función para mostrar las guías de remisión en la tabla correspondiente
     function mostrarGuiasRemision(guias) {
         let guiaTbody = $('#lista-guias-remision');
         guiaTbody.empty();  // Limpiar la tabla antes de agregar nuevas filas
 
         guias.forEach(function (guia) {
+            console.log("Datos de la guía recibida:", guia); // Depuración
+
+            let idGuia = guia.id || guia.guia_remision_id; // Asegurar que se usa el ID correcto
+
+            if (!idGuia) {
+                console.warn("ID de la guía no encontrado:", guia);
+                return; // Evita agregar filas si el ID no está definido
+            }
+
             let row = `
                 <tr>
                     <td>${guia.numero_guia}</td>
                     <td>${guia.fecha_emision}</td>
                     <td>${guia.estado}</td>
-                    <td><button class="btn btn-info" onclick="verDetalleGuia(${guia.numero_guia})">Ver Detalle</button></td>
+                    <td><button class="btn btn-info" onclick="verDetalleGuia(${idGuia})">Ver Detalle</button></td> 
                 </tr>
             `;
             guiaTbody.append(row);
         });
     }
+
+
 
     // Generar una nueva guía de remisión
     window.generarGuiaRemision = function () {
@@ -211,4 +222,44 @@ $(document).ready(function () {
             }
         });
     };
+
+    // Función para obtener el detalle de la guía de remisión
+    window.verDetalleGuia = function (idGuia) {
+        $.ajax({
+            url: `/guia_remision/${idGuia}/productos`,
+            method: 'GET',
+            success: function (productos) {
+                console.log("Productos obtenidos de la guía:", productos); // Depuración
+                mostrarProductosGuia(productos);
+                $('#detalleGuiaModal').modal('show');  // Mostrar el modal con los productos
+            },
+            error: function (error) {
+                console.error("Error al obtener los detalles de la guía:", error);
+                alert("Hubo un error al obtener los detalles de la guía.");
+            }
+        });
+    };
+
+    // Función para mostrar los productos de la guía en el modal
+    function mostrarProductosGuia(productos) {
+        let tbody = $('#productos-guia-lista');
+        tbody.empty(); // Limpiar antes de agregar nuevos datos
+
+        productos.forEach(function (producto) {
+            let row = `
+                <tr>
+                    <td>${producto.nombre}</td>
+                    <td>${producto.cantidad}</td>
+                    <td>${producto.estado}</td>
+                </tr>
+            `;
+            tbody.append(row);
+        });
+
+        if (productos.length === 0) {
+            tbody.append('<tr><td colspan="3" class="text-center">No hay productos en esta guía.</td></tr>');
+        }
+    }
+
+
 });

@@ -534,7 +534,7 @@ def obtener_ordenes_venta():
 
 @app.route('/orden_venta/<int:orden_id>', methods=['GET'])
 def obtener_orden(orden_id):
-    orden = OrdenVenta.query.get(orden_id)
+    orden = db.session.get(OrdenVenta, orden_id)
     if not orden:
         return jsonify({'mensaje': 'Orden no encontrada'}), 404
 
@@ -611,51 +611,36 @@ def guias_remision():
 
 @app.route('/orden_venta/<int:orden_id>/guias_remision', methods=['POST'])
 def crear_guia_remision(orden_id):
-    data = request.json
-    numero_guia = data.get('numero_guia')
-    productos = data.get('productos')
+    data = request.get_json()
 
-    if not numero_guia or not productos:
-        return jsonify({'mensaje': 'Número de guía y productos son requeridos'}), 400
+    # Crear la guía de remisión con el número proporcionado por el usuario
+    nueva_guia = GuiaRemision(
+        numero_guia=data['numero_guia'],  # Este es solo el identificador visible
+        orden_venta_id=orden_id,
+        fecha_emision=datetime.today().strftime('%d/%m/%Y'),
+        estado='Pendiente',
+        activo=True
+    )
+    db.session.add(nueva_guia)
+    db.session.commit()  # Hacemos commit para obtener el ID real
 
-    try:
-        nueva_guia = GuiaRemision(
-            numero_guia=numero_guia,
-            orden_venta_id=orden_id,
-            fecha_emision=datetime.today().strftime('%d/%m/%Y'),
-            estado='Pendiente'
+    # Ahora usamos el ID real de la guía recién creada
+    guia_id_real = nueva_guia.id  
+
+    # Agregar los productos a la tabla `producto_guia_remision`
+    for producto in data['productos']:
+        nuevo_producto_guia = ProductoGuiaRemision(
+            guia_remision_id=guia_id_real,  # Usamos el ID real de la guía, NO el numero_guia
+            producto_orden_id=producto['id'],
+            cantidad=producto['cantidad'],
+            estado='Pendiente',
+            activo=True
         )
-        db.session.add(nueva_guia)
-        db.session.commit()  # Guardamos para obtener el ID
+        db.session.add(nuevo_producto_guia)
 
-        app.logger.info(f"Guía creada: ID {nueva_guia.id}, Número: {nueva_guia.numero_guia}, Orden: {nueva_guia.orden_venta_id}")
+    db.session.commit()  # Guardamos en la BD
 
-        for producto in productos:
-            producto_id = producto.get('id')
-            cantidad = producto.get('cantidad')
-
-            if not producto_id or not cantidad:
-                app.logger.error(f"Datos incorrectos en producto: {producto}")
-                continue  # Saltar productos inválidos
-
-            nuevo_producto_guia = ProductoGuiaRemision(
-                guia_remision_id=nueva_guia.id,
-                producto_orden_id=producto_id,  # Reemplaza 'producto_id' por 'producto_orden_id' si es necesario
-                cantidad=cantidad,
-                estado='Pendiente'
-            )
-            db.session.add(nuevo_producto_guia)
-
-            app.logger.info(f"Producto agregado a la guía {nueva_guia.id}: Producto {producto_id}, Cantidad {cantidad}")
-
-        db.session.commit()
-        return jsonify({'mensaje': 'Guía de remisión creada correctamente'}), 201
-
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error al crear la guía: {str(e)}")
-        return jsonify({'mensaje': f'Ocurrió un error al crear la guía de remisión: {str(e)}'}), 500
-
+    return jsonify({'mensaje': 'Guía de remisión creada con éxito'}), 201
 
 @app.route('/productos/<int:producto_id>/stock', methods=['GET'])
 def obtener_stock_producto(producto_id):
@@ -677,16 +662,16 @@ def obtener_stock_producto(producto_id):
 @app.route('/orden_venta/<int:orden_id>/guias_remision', methods=['GET'])
 def obtener_guias_remision(orden_id):
     guias = GuiaRemision.query.filter_by(orden_venta_id=orden_id).all()
-    guias_data = []
-    for guia in guias:
-        guia_data = {
-            'numero_guia': guia.numero_guia,
-            'fecha_emision': guia.fecha_emision,
-            'estado': guia.estado
-        }
-        guias_data.append(guia_data)
 
-    return jsonify(guias_data), 200
+    return jsonify([
+        {
+            "id": guia.id,  # Asegurar que se envía el ID correcto
+            "numero_guia": guia.numero_guia,
+            "fecha_emision": guia.fecha_emision,
+            "estado": guia.estado
+        }
+        for guia in guias
+    ])
 
 @app.route('/orden_venta/<int:orden_id>/productos_remision', methods=['GET'])
 def obtener_productos_remision(orden_id):
@@ -760,14 +745,41 @@ def obtener_ordenes_venta_guias():
 
     return jsonify(resultado)
 
-@app.route('/orden_venta/<int:orden_id>/productos', methods=['GET'])
+@app.route('/guia_remision/<int:guia_id>/productos', methods=['GET'])
+def obtener_productos_guia(guia_id):
+    productos_remisionados = ProductoGuiaRemision.query.filter_by(guia_remision_id=guia_id).all()
+
+    if not productos_remisionados:
+        print(f"No se encontraron productos para la guía {guia_id}")
+
+    productos_lista = []
+    for prod in productos_remisionados:
+        producto_orden = db.session.get(ProductoOrden, prod.producto_orden_id)
+
+        if producto_orden:
+            producto_info = db.session.get(Producto, producto_orden.producto_id) if producto_orden else None
+        else:
+            producto_info = None
+
+        nombre_producto = producto_info.nombre if producto_info else "Producto no disponible"
+
+        productos_lista.append({
+            "nombre": nombre_producto,
+            "cantidad": prod.cantidad,
+            "estado": prod.estado
+        })
+
+    print(f"Productos obtenidos en el backend: {productos_lista}")  # Debugging
+    return jsonify(productos_lista), 200
+
+
     
 @app.route('/obtener_detalle_guia/<numero_guia>', methods=['GET'])
-def obtener_detalle_guia(numero_guia):
+def obtener_productos_de_guia(numero_guia):
     if not numero_guia:
         return jsonify({'error': 'Número de guía inválido'}), 400
 
-    guia = GuiaRemision.query.get(numero_guia)
+    guia = db.session.get(GuiaRemision, numero_guia)
     if not guia:
         return jsonify({'error': 'Guía no encontrada'}), 404
 
@@ -817,6 +829,7 @@ def eliminar_guia(guia_id):
             return jsonify({'mensaje': f'Error al eliminar la guía de remisión: {str(e)}'}), 500
     else:
         return jsonify({'mensaje': 'Método no permitido.'}), 405
+
 
 # Crear la tabla si no existe
 with app.app_context():

@@ -205,65 +205,70 @@ function eliminarProducto(id) {
         });
     }
 }
-function mostrarFormularioEditar(id) {
-    $.ajax({
-        url: `/productos/${id}`,
-        method: 'GET',
-        success: function(producto) {
-            let form = `
-                <form id="form-editar-producto">
-                    <div class="form-group">
-                        <label for="nombre">Nombre:</label>
-                        <input type="text" class="form-control" id="nombre" value="${producto.nombre}" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="descripcion">Descripción:</label>
-                        <input type="text" class="form-control" id="descripcion" value="${producto.descripcion}" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="precio">Precio:</label>
-                        <input type="number" class="form-control" id="precio" value="${producto.precio}" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="stock">Stock:</label>
-                        <input type="number" class="form-control" id="stock" value="${producto.stock}" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="proveedor">Proveedor:</label>
-                        <input type="text" class="form-control" id="proveedor" value="${producto.proveedor}" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="sucursal">Sucursal:</label>
-                        <input type="text" class="form-control" id="sucursal" value="${producto.sucursal}" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="almacen">Almacén:</label>
-                        <input type="text" class="form-control" id="almacen" value="${producto.almacen}" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="codigo_item">Código Item:</label>
-                        <input type="text" class="form-control" id="codigo_item" value="${producto.codigo_item}" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="codigo_barra">Código Barra:</label>
-                        <input type="text" class="form-control" id="codigo_barra" value="${producto.codigo_barra}" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="unidad">Unidad:</label>
-                        <input type="text" class="form-control" id="unidad" value="${producto.unidad}" required>
-                    </div>
-                    <button type="button" class="btn btn-primary" onclick="editarProducto(${producto.id})">Guardar Cambios</button>
-                    <button type="button" class="btn btn-secondary" onclick="cerrarFormularioEdicion()">Cancelar</button>
-                </form>
-            `;
-            $('#formulario-editar-container').html(form);
-        }
+
+function mostrarFormularioAgregar() {
+    let form = `
+        <div class="card p-3">
+            <form id="form-agregar-producto">
+                <div class="form-group">
+                    <label for="nombre">Nombre:</label>
+                    <input type="text" class="form-control" id="nombre" required>
+                </div>
+                <div class="form-group">
+                    <label for="descripcion">Descripción:</label>
+                    <input type="text" class="form-control" id="descripcion" required>
+                </div>
+                <div class="form-group">
+                    <label for="precio">Precio:</label>
+                    <input type="number" class="form-control" id="precio" required>
+                </div>
+                <div class="form-group">
+                    <label for="stock">Stock:</label>
+                    <input type="number" class="form-control" id="stock" required>
+                </div>
+                <div class="form-group">
+                    <label for="proveedor">Proveedor:</label>
+                    <input type="text" class="form-control" id="proveedor" required>
+                </div>
+                <div class="form-group">
+                    <label for="sucursal">Sucursal:</label>
+                    <input type="text" class="form-control" id="sucursal" required>
+                </div>
+                <div class="form-group">
+                    <label for="almacen">Almacén:</label>
+                    <input type="text" class="form-control" id="almacen" required>
+                </div>
+                <div class="form-group">
+                    <label for="codigo_item">Código Item:</label>
+                    <input type="text" class="form-control" id="codigo_item" required>
+                </div>
+                <div class="form-group">
+                    <label for="codigo_barra">Código Barra:</label>
+                    <input type="text" class="form-control" id="codigo_barra" required>
+                </div>
+                <div class="form-group">
+                    <label for="unidad">Unidad:</label>
+                    <input type="text" class="form-control" id="unidad" required>
+                </div>
+                <div class="d-flex justify-content-between mt-3">
+                    <button type="submit" class="btn btn-primary">Agregar</button>
+                    <button type="button" class="btn btn-secondary" onclick="cerrarFormularioAgregar()">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    `;
+    $('#formulario').html(form);
+
+    $('#form-agregar-producto').on('submit', function(event) {
+        event.preventDefault();
+        agregarProducto();
     });
 }
 
-function cerrarFormularioEdicion() {
-    $('#formulario-editar-container').html(""); // Limpia el contenedor
+function cerrarFormularioAgregar() {
+    $('#formulario').html(""); // Limpia el formulario y lo oculta
 }
+
 
 function editarProducto(id) {
     let producto = {
