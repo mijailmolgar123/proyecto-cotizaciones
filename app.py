@@ -200,6 +200,21 @@ def trabajador_dashboard():
 def cliente_dashboard():
     return render_template('cliente_dashboard.html')
 
+@app.route('/cotizaciones_dashboard')
+def cotizaciones_dashboard():
+    return render_template('cotizaciones_dashboard.html')
+
+@app.route('/verificacion_cotizacion')
+def verificacion_cotizacion():
+    return render_template('verificacion_cotizacion.html')
+
+@app.route('/guias_remision')
+def guias_remision():
+
+    guias = GuiaRemision.query.all()
+
+    return render_template('guias_remision.html', guias=guias)
+
 @app.route('/productos', methods=['POST'])
 def crear_producto():
     data = request.get_json()
@@ -242,7 +257,6 @@ def obtener_productos():
         for p in productos
     ]
     return jsonify(productos_json)
-
 
 @app.route('/productos/<int:id>', methods=['GET'])
 def obtener_producto(id):
@@ -301,7 +315,6 @@ def desactivar_producto(id):
     db.session.commit()
     return jsonify({'mensaje': 'Producto desactivado con éxito'}), 200
 
-
 @app.route('/productos/buscar', methods=['GET'])
 def buscar_productos():
     termino = request.args.get('termino', '').strip()
@@ -334,14 +347,6 @@ def buscar_productos():
         for p in productos
     ]
     return jsonify(productos_json)
-
-@app.route('/cotizaciones_dashboard')
-def cotizaciones_dashboard():
-    return render_template('cotizaciones_dashboard.html')
-
-@app.route('/verificacion_cotizacion')
-def verificacion_cotizacion():
-    return render_template('verificacion_cotizacion.html')
 
 @app.route('/guardar_cotizacion', methods=['POST'])
 def guardar_cotizacion():
@@ -436,7 +441,6 @@ def obtener_todas_las_cotizaciones():
     ]
     return jsonify(cotizaciones_data)
 
-
 @app.route('/transformar_orden_venta/<int:cotizacion_id>', methods=['POST'])
 def transformar_orden_venta(cotizacion_id):
     cotizacion = db.session.get(Cotizacion, cotizacion_id)
@@ -484,7 +488,6 @@ def transformar_orden_venta(cotizacion_id):
 
     return jsonify({'mensaje': 'Orden de Venta generada correctamente.'}), 200
 
-# Mantén una única definición de la ruta login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -529,7 +532,6 @@ def obtener_ordenes_venta():
         output.append(orden_data)
 
     return jsonify(output)
-
 
 @app.route('/orden_venta/<int:orden_id>', methods=['GET'])
 def obtener_orden(orden_id):
@@ -600,14 +602,6 @@ def actualizar_estado_orden(orden_id):
         db.session.rollback()  # Revertimos los cambios si hay un error
         return jsonify({'mensaje': f'Error al actualizar el estado: {str(e)}'}), 500
 
-@app.route('/guias_remision')
-def guias_remision():
-
-    guias = GuiaRemision.query.all()
-
-    return render_template('guias_remision.html', guias=guias)
-
-
 @app.route('/orden_venta/<int:orden_id>/guias_remision', methods=['POST'])
 def crear_guia_remision(orden_id):
     data = request.get_json()
@@ -657,7 +651,6 @@ def obtener_stock_producto(producto_id):
         'cantidad_a_pedir': cantidad_a_pedir
     })
 
-
 @app.route('/orden_venta/<int:orden_id>/guias_remision', methods=['GET'])
 def obtener_guias_remision(orden_id):
     guias = GuiaRemision.query.filter_by(orden_venta_id=orden_id).all()
@@ -702,7 +695,6 @@ def obtener_productos_remision(orden_id):
         )
 
     return jsonify(productos_suma), 200
-
 
 @app.route('/ordenes_venta_guias', methods=['GET'])
 def obtener_ordenes_venta_guias():
@@ -778,9 +770,7 @@ def obtener_productos_guia(guia_id):
 
     print(f"Productos obtenidos en el backend: {productos_lista}")  # Debugging
     return jsonify(productos_lista), 200
-
-
-    
+  
 @app.route('/obtener_detalle_guia/<numero_guia>', methods=['GET'])
 def obtener_productos_de_guia(numero_guia):
     if not numero_guia:
@@ -836,7 +826,6 @@ def eliminar_guia(guia_id):
             return jsonify({'mensaje': f'Error al eliminar la guía de remisión: {str(e)}'}), 500
     else:
         return jsonify({'mensaje': 'Método no permitido.'}), 405
-
 
 # Crear la tabla si no existe
 with app.app_context():
