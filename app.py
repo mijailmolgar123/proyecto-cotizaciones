@@ -218,6 +218,7 @@ def guias_remision():
 @app.route('/productos', methods=['POST'])
 def crear_producto():
     data = request.get_json()
+    print(data) 
     nuevo_producto = Producto(
         nombre=data['nombre'],
         descripcion=data['descripcion'],
@@ -237,7 +238,22 @@ def crear_producto():
 
 @app.route('/productos', methods=['GET'])
 def obtener_productos():
-    productos = Producto.query.filter_by(activo=True).order_by(Producto.id.asc()).limit(20).all()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    termino = request.args.get('termino', '', type=str).strip()
+
+    query = Producto.query.filter(Producto.activo == True)
+
+    if termino:
+        query = query.filter(
+            db.or_(
+                Producto.nombre.ilike(f"%{termino}%"),
+                Producto.codigo_item.ilike(f"%{termino}%")
+            )
+        )
+
+    productos_paginados = query.order_by(Producto.id.asc()).paginate(page=page, per_page=per_page, error_out=False)
+
     productos_json = [
         {
             'id': p.id,
@@ -251,12 +267,18 @@ def obtener_productos():
             'codigo_item': p.codigo_item,
             'codigo_barra': p.codigo_barra,
             'unidad': p.unidad,
-            'creado_por': p.creado_por,
             'activo': p.activo
         }
-        for p in productos
+        for p in productos_paginados.items
     ]
-    return jsonify(productos_json)
+
+    return jsonify({
+        'productos': productos_json,
+        'total': productos_paginados.total,
+        'paginas': productos_paginados.pages,
+        'pagina_actual': productos_paginados.page
+    })
+
 
 @app.route('/productos/<int:id>', methods=['GET'])
 def obtener_producto(id):

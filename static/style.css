@@ -64,3 +64,10 @@ body {
     margin: 0;
     padding: 0;
 }
+
+.formulario-alineado-izquierda {
+    text-align: left;
+    margin: 0 auto;
+    max-width: 600px;
+    /* Ajusta este valor según el ancho deseado */
+}
