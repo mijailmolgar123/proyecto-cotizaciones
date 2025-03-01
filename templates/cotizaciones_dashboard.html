@@ -46,7 +46,7 @@
                             <th>Stock</th>
                             <th>Stock Necesario</th>
                             <th>Precio</th>
-                            <th>% Ganancia</th>
+                            <th>% Margen</th>
                             <th>Precio Total</th>
                             <th>Tipo de Compra</th>
                             <th>Acciones</th>
@@ -103,6 +103,30 @@
                                     <div class="form-group">
                                         <label for="celular">Celular (Opcional):</label>
                                         <input type="text" class="form-control" id="celular">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="plazo_entrega">Plazo de Entrega (días):</label>
+                                        <input type="number" class="form-control" id="plazo_entrega" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="pago_credito">Plazo de Pago en Crédito:</label>
+                                        <input type="text" class="form-control" id="pago_credito" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="tipo_cambio">Tipo de Cambio:</label>
+                                        <select class="form-control" id="tipo_cambio">
+                                            <option value="Soles">Soles</option>
+                                            <option value="Dólares">Dólares</option>
+                                            <option value="Euros">Euros</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="lugar_entrega">Lugar de Entrega (Opcional):</label>
+                                        <input type="text" class="form-control" id="lugar_entrega">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="detalle_adicional">Detalle Adicional (Opcional):</label>
+                                        <textarea class="form-control" id="detalle_adicional" rows="3"></textarea>
                                     </div>
                                 </form>
                             </div>

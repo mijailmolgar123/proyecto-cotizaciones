@@ -59,8 +59,6 @@ class Usuario(UserMixin, db.Model):
 
         return check_password_hash(self.contraseña_hash, contraseña)
 
-
-
 class Producto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(80), nullable=False)
@@ -90,6 +88,12 @@ class Cotizacion(db.Model):
     creado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
     productos = db.relationship('ProductoCotizacion', backref='cotizacion', lazy=True)
     activo = db.Column(db.Boolean, default=True)
+    # Nuevas columnas
+    plazo_entrega = db.Column(db.Integer, nullable=False)  # Plazo de entrega en días
+    pago_credito = db.Column(db.String(255), nullable=False)  # Plazo de pago en crédito
+    tipo_cambio = db.Column(db.String(10), nullable=False)  # Moneda: soles, dólares o euros
+    lugar_entrega = db.Column(db.String(255))  # Campo opcional para el lugar de entrega
+    detalle_adicional = db.Column(db.Text)  # Campo opcional para detalles adicionales
 
 class ProductoCotizacion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -182,7 +186,6 @@ def gerente_dashboard():
 
 def gerente_dashboard():
     return render_template('gerente_dashboard.html')
-
 
 @app.route('/edicion_productos')
 def edicion_productos():
@@ -278,7 +281,6 @@ def obtener_productos():
         'paginas': productos_paginados.pages,
         'pagina_actual': productos_paginados.page
     })
-
 
 @app.route('/productos/<int:id>', methods=['GET'])
 def obtener_producto(id):
@@ -383,6 +385,11 @@ def guardar_cotizacion():
         celular=datos.get('celular', ''),  # Campo opcional
         fecha=datos['fecha'],
         total=datos['total'],
+        plazo_entrega=int(datos['plazo_entrega']),  # Convertir a entero
+        pago_credito=datos['pago_credito'],
+        tipo_cambio=datos['tipo_cambio'],
+        lugar_entrega=datos.get('lugar_entrega', ''),  # Opcional
+        detalle_adicional=datos.get('detalle_adicional', ''),  # Opcional
         creado_por=current_user.id  # Añadir quién creó la cotización
     )
     db.session.add(nueva_cotizacion)

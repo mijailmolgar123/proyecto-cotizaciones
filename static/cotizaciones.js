@@ -117,8 +117,13 @@ function guardarCotizacion() {
         ruc: $('#ruc').val(),
         celular: $('#celular').val(),
         fecha: new Date().toLocaleDateString(), // Fecha actual
-        productos: obtenerProductosDeCotizacion(), // Productos seleccionados
-        total: $('#total-precio').text() // Total de la cotización
+        productos: obtenerProductosDeCotizacion(),
+        total: $('#total-precio').text(),
+        plazo_entrega: $('#plazo_entrega').val(),
+        pago_credito: $('#pago_credito').val(),
+        tipo_cambio: $('#tipo_cambio').val(),
+        lugar_entrega: $('#lugar_entrega').val(),
+        detalle_adicional: $('#detalle_adicional').val()
     };
 
     $.ajax({
@@ -128,7 +133,11 @@ function guardarCotizacion() {
         data: JSON.stringify(cotizacion),
         success: function(response) {
             alert(response.mensaje);
-            $('#modalCotizacion').modal('hide'); // Cierra la ventana emergente
+            $('#modalCotizacion').modal('hide'); // Cierra el modal
+        },
+        error: function(xhr, status, error) {
+            console.error('Error al guardar la cotización:', error);
+            alert('Hubo un error al guardar la cotización.');
         }
     });
 }
