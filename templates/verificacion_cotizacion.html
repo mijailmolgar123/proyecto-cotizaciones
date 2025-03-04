@@ -4,23 +4,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verificación de Cotización</title>
+    <title>Control de Cotización</title>
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
 </head>
 
 <body>
     <div class="container">
-        <h1>Verificación de Cotización</h1>
+        <h1>Control de Cotización</h1>
         <table class="table table-striped">
             <thead>
                 <tr>
                     <th>Empresa</th>
                     <th>RUC</th>
                     <th>Fecha</th>
-                    <th>Email</th>
                     <th>Estado</th>
-                    <th>Creado por</th> <!-- Nueva columna para mostrar el creador -->
-                    <th>Acciones</th>
+                    <th>Creado por</th>
+                    <th class="columna-acciones">Acciones</th>
                 </tr>
             </thead>
             <tbody id="cotizaciones-lista">
@@ -41,6 +40,15 @@
                     </button>
                 </div>
                 <div class="modal-body">
+                    <div class="form-group">
+                        <label for="numeroOrdenCompra">Número de Orden de Compra:</label>
+                        <input type="text" class="form-control" id="numeroOrdenCompra" placeholder="Ingrese el número de OC">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="fechaOrdenCompra">Fecha de Orden de Compra:</label>
+                        <input type="date" class="form-control" id="fechaOrdenCompra">
+                    </div>
                     <table class="table table-striped">
                         <thead>
                             <tr>

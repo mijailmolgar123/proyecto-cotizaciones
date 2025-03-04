@@ -7,6 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
 import os
 from flask import request, jsonify
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -123,6 +124,9 @@ class OrdenVenta(db.Model):
     seguimiento = db.relationship('SeguimientoOrden', backref='orden_venta', lazy=True)
     guias_remision = db.relationship('GuiaRemision', backref='orden_venta', lazy=True)
     activo = db.Column(db.Boolean, default=True)
+     # **Nuevos campos**
+    numero_orden_compra = db.Column(db.String(50), nullable=False)  # Número de OC del cliente
+    fecha_orden_compra = db.Column(db.String(10), nullable=False)   # Fecha de OC
 
 class ProductoOrden(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -493,7 +497,9 @@ def transformar_orden_venta(cotizacion_id):
         fecha=datetime.today().strftime('%d/%m/%Y'),
         total=sum([float(prod['precio_total']) for prod in datos['productos']]),
         estado='En Proceso',
-        creado_por=current_user.id  # Añadir quién creó la orden de compra
+        creado_por=current_user.id,
+        numero_orden_compra=datos['numero_orden_compra'],
+        fecha_orden_compra=datos['fecha_orden_compra']
     )
     db.session.add(nueva_orden)
     db.session.commit()  # Commit para obtener el ID de la orden de compra
@@ -545,14 +551,38 @@ def obtener_ordenes_venta():
     ordenes = OrdenVenta.query.all()
     output = []
 
+    hoy = datetime.today().date()  # Obtener la fecha actual
+
     for orden in ordenes:
-        creador = db.session.get(Usuario, orden.creado_por)  # Corrección aquí
+        creador = db.session.get(Usuario, orden.creado_por)
+
+        # Verificar si la fecha existe y convertirla correctamente
+        fecha_orden_compra = None
+        if orden.fecha_orden_compra:
+            try:
+                # Intentar convertir desde el formato que devuelve la base de datos (YYYY-MM-DD)
+                fecha_orden_compra = datetime.strptime(orden.fecha_orden_compra, "%Y-%m-%d").date()
+            except ValueError:
+                print(f"Error al convertir la fecha: {orden.fecha_orden_compra}")
+
+        # Determinar si la orden está a tiempo, en límite o a destiempo
+        if fecha_orden_compra:
+            if fecha_orden_compra > hoy:
+                estado_tiempo = "A tiempo"
+            elif fecha_orden_compra == hoy:
+                estado_tiempo = "Tiempo límite"
+            else:
+                estado_tiempo = "A destiempo"
+        else:
+            estado_tiempo = "Fecha no definida"
+
         orden_data = {
             'id': orden.id,
             'cliente': orden.cliente,
             'solicitante': orden.solicitante,
             'fecha': orden.fecha,
-            'email': orden.email,
+            'fecha_orden_compra': orden.fecha_orden_compra if orden.fecha_orden_compra else "No definida",
+            'estado_tiempo': estado_tiempo,  # Estado de tiempo
             'estado': orden.estado,
             'creado_por': creador.nombre_usuario if creador else 'Desconocido',
             'productos': [producto.producto_id for producto in orden.productos],

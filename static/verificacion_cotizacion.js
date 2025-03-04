@@ -16,10 +16,9 @@ $(document).ready(function() {
                             <td>${cotizacion.cliente}</td>
                             <td>${cotizacion.ruc}</td>
                             <td>${cotizacion.fecha}</td>
-                            <td>${cotizacion.email}</td>
                             <td><span class="badge badge-${cotizacion.estado === 'Pendiente' ? 'warning' : 'success'}">${cotizacion.estado}</span></td>
                             <td>${cotizacion.creado_por}</td> <!-- Mostrar el creador de la cotización -->
-                            <td><button class="btn btn-primary" onclick="verDetalleCotizacion(${cotizacion.id})">Ver Detalle</button></td>
+                            <td><button class="btn btn-primary" onclick="verDetalleCotizacion(${cotizacion.id})">Transformar a Orden de Venta</button></td>
                         </tr>
                     `;
                     tbody.append(row);  // Añadir la fila al cuerpo de la tabla
@@ -69,7 +68,14 @@ $(document).ready(function() {
 
 
 
-    $('#transformar-orden-venta').click(function() {
+    $('#transformar-orden-venta').click(function () {
+        let numeroOrdenCompra = $('#numeroOrdenCompra').val();
+        let fechaOrdenCompra = $('#fechaOrdenCompra').val();
+
+        if (!numeroOrdenCompra || !fechaOrdenCompra) {
+            alert("Debe ingresar el número y la fecha de la Orden de Compra.");
+            return;
+        }
         let productosSeleccionados = [];
         $('#productos-cotizacion-lista tr').each(function() {
             if ($(this).find('input[type="checkbox"]').is(':checked')) {
@@ -84,17 +90,22 @@ $(document).ready(function() {
 
         if (productosSeleccionados.length > 0) {
             $.ajax({
-                url: `/transformar_orden_venta/${window.currentCotizacionId}`,  // Usar el ID guardado
+                url: `/transformar_orden_venta/${window.currentCotizacionId}`,
                 method: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({ productos: productosSeleccionados }),
+                data: JSON.stringify({
+                    numero_orden_compra: numeroOrdenCompra,
+                    fecha_orden_compra: fechaOrdenCompra,
+                    productos: productosSeleccionados
+                }),
                 success: function(response) {
                     alert('Orden de venta generada exitosamente.');
                     $('#detalleCotizacionModal').modal('hide');
-                    cargarCotizaciones();  // Refrescar la lista de cotizaciones
+                    cargarCotizaciones();
                 },
-                error: function (xhr, status, error) {
-                    console.error('Error al obtener los detalles de la orden de venta:', xhr.responseText); alert("Hubo un error al obtener los detalles de la orden de venta.");
+                error: function(xhr, status, error) {
+                    console.error('Error al obtener los detalles de la orden de venta:', xhr.responseText);
+                    alert("Hubo un error al obtener los detalles de la orden de venta.");
                 }
             });
         } else {

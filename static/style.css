@@ -71,3 +71,19 @@ body {
     max-width: 600px;
     /* Ajusta este valor según el ancho deseado */
 }
+
+.columna-acciones {
+    width: 240px;
+    /* Ajusta según sea necesario */
+    text-align: center;
+    /* Centra el botón */
+}
+
+.columna-acciones button {
+    font-size: 10px;
+    /* Reduce el tamaño del texto */
+    padding: 4px 8px;
+    /* Reduce el espacio interno del botón */
+    white-space: nowrap;
+    /* Evita que el texto se divida en varias líneas */
+}

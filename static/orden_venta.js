@@ -5,7 +5,7 @@ $(document).ready(function () {
 
     function cargarOrdenesVenta() {
         $.ajax({
-            url: '/ordenes_venta',  
+            url: '/ordenes_venta',
             method: 'GET',
             success: function (ordenes) {
                 let tbody = $('#ordenes-lista');
@@ -16,14 +16,14 @@ $(document).ready(function () {
                         <tr>
                             <td>${orden.cliente}</td>
                             <td>${orden.solicitante}</td>
-                            <td>${orden.fecha}</td>
-                            <td>${orden.email}</td>
+                            <td>${orden.fecha_orden_compra || 'No definida'}</td>
                             <td><span class="badge badge-${orden.estado === 'Pendiente' ? 'warning' : 'success'}">${orden.estado}</span></td>
+                            <td>${orden.estado_tiempo}</td>  <!-- Nuevo campo para estado de tiempo -->
                             <td>${orden.creado_por}</td>
                             <td><button class="btn btn-primary" onclick="verDetalleOrden(${orden.id})">Ver Detalle</button></td>
                         </tr>
                     `;
-                    tbody.append(row);  // Agregar fila a la tabla
+                    tbody.append(row);
                 });
             },
             error: function (xhr, status, error) {
