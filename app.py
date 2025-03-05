@@ -8,15 +8,14 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, curren
 import os
 from flask import request, jsonify
 from datetime import datetime
+from flask import Flask, render_template, redirect, url_for
 
 app = Flask(__name__)
 
 def create_app():
 
     # Obtener la ruta absoluta del directorio actual
-
     basedir = os.path.abspath(os.path.dirname(__file__))
-
 
     # Asegúrate de que la carpeta 'instance' exista
     if not os.path.exists(os.path.join(basedir, 'instance')):
@@ -35,13 +34,17 @@ def create_app():
     return app
 
 db = SQLAlchemy()
+app = create_app()
 migrate = Migrate(app, db)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-app = create_app()
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.get(Usuario, int(user_id)) 
+
 
 class Usuario(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -188,34 +191,38 @@ def home():
 def gerente_dashboard():
     return render_template('gerente_dashboard.html')
 
-def gerente_dashboard():
-    return render_template('gerente_dashboard.html')
-
 @app.route('/edicion_productos')
+@login_required
 def edicion_productos():
     return render_template('edicion_productos.html')
 
 @app.route('/orden_venta')
+@login_required
 def orden_venta():
     return render_template('orden_venta.html')
 
 @app.route('/trabajador_dashboard')
+@login_required
 def trabajador_dashboard():
     return render_template('trabajador_dashboard.html')
 
 @app.route('/cliente_dashboard')
+@login_required
 def cliente_dashboard():
     return render_template('cliente_dashboard.html')
 
 @app.route('/cotizaciones_dashboard')
+@login_required
 def cotizaciones_dashboard():
     return render_template('cotizaciones_dashboard.html')
 
 @app.route('/verificacion_cotizacion')
+@login_required
 def verificacion_cotizacion():
     return render_template('verificacion_cotizacion.html')
 
 @app.route('/guias_remision')
+@login_required
 def guias_remision():
 
     guias = GuiaRemision.query.all()
@@ -542,9 +549,10 @@ def login():
 
 @app.route('/logout')
 @login_required
-@login_manager.user_loader
-def load_user(user_id):
-    return db.session.get(Usuario, int(user_id))
+def logout():
+    logout_user()
+    flash('Sesión cerrada exitosamente', 'success')
+    return redirect(url_for('login'))
 
 @app.route('/ordenes_venta', methods=['GET'])
 def obtener_ordenes_venta():
