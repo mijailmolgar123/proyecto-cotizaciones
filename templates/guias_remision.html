@@ -42,6 +42,8 @@
                     </button>
                 </div>
                 <div class="modal-body">
+                    <!-- Tabla de productos -->
+                    <h5>Productos en la Guía</h5>
                     <table class="table table-striped">
                         <thead>
                             <tr>
@@ -51,19 +53,31 @@
                             </tr>
                         </thead>
                         <tbody id="productos-guia-lista">
-                            <!-- Productos de la guía de remisión cargados dinámicamente -->
+                            <!-- Los productos se insertarán dinámicamente -->
                         </tbody>
                     </table>
-                    <div>
-                        <label for="estadoGuia">Estado de la Guía:</label>
-                        <select id="estadoGuia" class="form-control">
-                            <option value="Pendiente">Pendiente</option>
-                            <option value="Entregado">Entregado</option>
-                        </select>
-                    </div>
+    
+                    <!-- Actualizar Estado -->
+                    <h5>Actualizar Estado</h5>
+                    <select id="estadoGuia" class="form-control">
+                        <option value="Pendiente">Pendiente</option>
+                        <option value="Entregado">Entregado</option>
+                        <option value="Recibido con Observaciones">Recibido con Observaciones</option>
+                        <option value="Recibido">Recibido</option>
+                    </select>
+    
+                    <!-- Comentarios -->
+                    <h5>Comentarios</h5>
+                    <textarea id="comentarioGuia" class="form-control" rows="3" placeholder="Escriba aquí..."></textarea>
+    
+                    <!-- Adjuntar Imagen -->
+                    <h5>Adjuntar Imagen</h5>
+                    <input type="file" id="imagenGuia" class="form-control">
+                    <img id="imagenPrevia" src="" alt="Vista previa de imagen" class="img-fluid mt-2" style="display:none;">
                 </div>
+    
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    <button class="btn btn-secondary" onclick="volverADetalleOrden()">Volver</button>
                     <button type="button" class="btn btn-primary" id="guardarCambiosGuia">Guardar Cambios</button>
                 </div>
             </div>

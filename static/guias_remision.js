@@ -1,5 +1,41 @@
 window.mostrarGuias = function(ordenId) {
-    $(`.guia-row[data-orden-id="${ordenId}"]`).toggle();  // Mostrar u ocultar las guías relacionadas
+    let tbody = $(`#detalle-guias-${ordenId}`);
+
+    // Si ya hay datos cargados, simplemente colapsar/expandir
+    if (tbody.children().length > 0) {
+        return;
+    }
+
+    $.ajax({
+        url: `/obtener_guias_por_orden/${ordenId}`,
+        method: 'GET',
+        success: function(guias) {
+            tbody.empty();
+
+            if (guias.length > 0) {
+                guias.forEach(function(guia) {
+                    let guiaRow = `
+                        <tr>
+                            <td>Guía #${guia.numero_guia}</td>
+                            <td>${guia.fecha_emision}</td>
+                            <td>${guia.estado}</td>
+                            <td>
+                                <button class="btn btn-primary" onclick="modificarGuia(${guia.id})">Modificar</button>
+                                <button class="btn btn-danger" onclick="eliminarGuia(${guia.id})">Eliminar</button>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.append(guiaRow);
+                });
+            } else {
+                tbody.append(`<tr><td colspan="4">No hay guías de remisión asociadas a esta orden.</td></tr>`);
+            }
+        },
+        error: function(error) {
+            console.error('Error al obtener las guías de la orden:', error);
+            alert('Hubo un error al obtener las guías de la orden.');
+        }
+    });
 };
 
 window.eliminarGuia = function(numeroGuia) {
@@ -33,39 +69,36 @@ function cargarOrdenesYGuias() {
                 let ordenRow = `
                     <tr>
                         <td>${orden.id}</td>
-                        <td>${orden.numero_orden_compra}</td>  <!-- 🔥 Agregado aquí -->
+                        <td>${orden.numero_orden_compra}</td> 
                         <td>${orden.cliente}</td>
                         <td>${orden.fecha}</td>
                         <td>${orden.total}</td>
-                        <td><button class="btn btn-info" onclick="mostrarGuias(${orden.id})">Ver Guías</button></td>
+                        <td>
+                            <button class="btn btn-info" onclick="mostrarGuias(${orden.id})" 
+                                data-toggle="collapse" data-target="#guias-${orden.id}" aria-expanded="false">
+                                Ver Guías
+                            </button>
+                        </td>
+                    </tr>
+                    <tr id="guias-${orden.id}" class="collapse">
+                        <td colspan="6">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Número Guía</th>
+                                        <th>Fecha Emisión</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detalle-guias-${orden.id}">
+                                    <!-- Aquí se insertarán dinámicamente las guías -->
+                                </tbody>
+                            </table>
+                        </td>
                     </tr>
                 `;
                 tbody.append(ordenRow);
-
-                if (orden.guias && orden.guias.length > 0) {
-                    orden.guias.forEach(function (guia) {
-                        let guiaRow = `
-                            <tr class="guia-row" data-orden-id="${orden.id}" style="display:none;">
-                                <td colspan="2">Guía #${guia.numero_guia}</td>
-                                <td>${guia.fecha_emision}</td>
-                                <td>${guia.estado}</td>
-                                <td>
-                                    <button class="btn btn-primary" onclick="verDetalleGuia('${guia.numero_guia}')">Ver</button>
-                                    <button class="btn btn-warning" onclick="editarGuia(${guia.numero_guia})">Editar</button>
-                                    <button class="btn btn-danger" onclick="eliminarGuia(${guia.numero_guia})">Eliminar</button>
-                                </td>
-                            </tr>
-                        `;
-                        tbody.append(guiaRow);
-                    });
-                } else {
-                    let noGuiasRow = `
-                        <tr class="guia-row" data-orden-id="${orden.id}">
-                            <td colspan="6">No hay guías de remisión asociadas a esta orden.</td>
-                        </tr>
-                    `;
-                    tbody.append(noGuiasRow);
-                }
             });
         },
         error: function(error) {
@@ -198,3 +231,101 @@ $(document).ready(function () {
         });
     });
 });
+
+window.modificarGuia = function(idGuia) {
+    if (!idGuia || isNaN(idGuia)) {
+        console.error("Error: ID de la guía no recibido en modificarGuia.");
+        alert("Error: No se recibió el ID de la guía.");
+        return;
+    }
+
+    console.log("ID de Guía recibido en modificarGuia:", idGuia); // Debugging
+
+    $.ajax({
+        url: `/obtener_detalle_guia/${idGuia}`,
+        method: 'GET',
+        success: function(guia) {
+            console.log("Guía encontrada:", guia);
+
+            let tbody = $('#productos-guia-lista');
+            tbody.empty();
+
+            guia.productos.forEach(function(producto) {
+                let row = `
+                    <tr>
+                        <td>${producto.nombre}</td>
+                        <td>${producto.cantidad}</td>
+                        <td>${producto.estado}</td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+
+            $('#estadoGuia').val(guia.estado);
+            $('#comentarioGuia').val(guia.comentario || ''); // Agregar comentario si existe
+
+            if (guia.imagen_url) {
+                $('#imagenPrevia').attr('src', guia.imagen_url).show();
+            } else {
+                $('#imagenPrevia').hide();
+            }
+            $('#imagenGuia').val("");
+            $('#detalleGuiaModal').data('idGuia', idGuia);
+            console.log("ID de guía almacenado en modal:", $('#detalleGuiaModal').data('idGuia'));
+
+            $('#detalleGuiaModal').modal('show');
+        },
+        error: function(error) {
+            console.error('Error al obtener el detalle de la guía:', error);
+            alert('Hubo un error al obtener los detalles de la guía.');
+        }
+    });
+};
+
+// Función para guardar los cambios de la guía
+$('#guardarCambiosGuia').click(function() {
+    let idGuia = $('#detalleGuiaModal').data('idGuia'); 
+
+    console.log("ID de guía recuperado en guardarCambiosGuia:", idGuia);
+
+    if (!idGuia || isNaN(idGuia)) {
+        alert('Error: ID de la Guía no definido.');
+        return;
+    }
+
+    let estadoGuia = $('#estadoGuia').val();
+    let comentario = $('#comentarioGuia').val();
+    let imagenInput = $('#imagenGuia')[0];
+    let imagen = imagenInput && imagenInput.files.length > 0 ? imagenInput.files[0] : null;
+
+    let formData = new FormData();
+    formData.append('estado', estadoGuia);
+    formData.append('comentario', comentario);
+    if (imagen) {
+        formData.append('imagen', imagen);
+    }
+
+    $.ajax({
+        url: `/actualizar_guia/${idGuia}`, 
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(response) {
+            alert('Cambios guardados exitosamente.');
+            $('#detalleGuiaModal').modal('hide');  // Cerrar modal
+            cargarOrdenesYGuias();  // Refrescar lista de guías
+        },
+        error: function(error) {
+            console.error('Error al guardar los cambios de la guía:', error);
+            alert('Hubo un error al guardar los cambios.');
+        }
+    });
+});
+
+window.volverADetalleOrden = function() {
+    $('#detalleGuiaModal').modal('hide'); 
+    if (window.modalAnterior) {
+        $(window.modalAnterior).modal('show');
+    }
+};

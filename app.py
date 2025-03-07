@@ -832,6 +832,7 @@ def obtener_ordenes_venta_guias():
             'numero_orden_compra': orden.numero_orden_compra,
             'guias': [
                 {
+                    'id': guia.id,
                     'numero_guia': guia.numero_guia,
                     'fecha_emision': guia.fecha_emision,
                     'estado': guia.estado
@@ -897,10 +898,9 @@ def obtener_productos_de_guia(numero_guia):
         'productos': productos
     })
 
-
-@app.route('/actualizar_guia/<int:numero_guia>', methods=['POST'])
-def actualizar_guia(numero_guia):
-    guia = db.session.get(GuiaRemision, numero_guia)
+@app.route('/actualizar_guia/<int:id_guia>', methods=['POST'])
+def actualizar_guia(id_guia):
+    guia = db.session.get(GuiaRemision, id_guia)  # Buscar por ID en lugar de número de guía
     if not guia:
         return jsonify({'error': 'Guía no encontrada'}), 404
 
@@ -952,6 +952,19 @@ def eliminar_guia(guia_id):
             return jsonify({'mensaje': f'Error al eliminar la guía de remisión: {str(e)}'}), 500
     else:
         return jsonify({'mensaje': 'Método no permitido.'}), 405
+
+@app.route('/obtener_guias_por_orden/<int:orden_id>', methods=['GET'])
+def obtener_guias_por_orden(orden_id):
+    guias = GuiaRemision.query.filter_by(orden_venta_id=orden_id).all()
+    return jsonify([
+        {
+            'id': guia.id,
+            'numero_guia': guia.numero_guia,
+            'fecha_emision': guia.fecha_emision,
+            'estado': guia.estado
+        }
+        for guia in guias
+    ])
 
 # Crear la tabla si no existe
 with app.app_context():
