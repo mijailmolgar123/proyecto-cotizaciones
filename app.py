@@ -9,8 +9,17 @@ import os
 from flask import request, jsonify
 from datetime import datetime
 from flask import Flask, render_template, redirect, url_for
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+
+UPLOAD_FOLDER = 'static/uploads/'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def create_app():
 
@@ -165,11 +174,13 @@ class Actividad(db.Model):
 class GuiaRemision(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     numero_guia = db.Column(db.String(100), nullable=False, unique=True)
-    orden_venta_id = db.Column(db.Integer, db.ForeignKey('orden_venta.id'), nullable=False)  # Asociada a una orden de venta
+    orden_venta_id = db.Column(db.Integer, db.ForeignKey('orden_venta.id'), nullable=False)
     fecha_emision = db.Column(db.String(10), nullable=False)
-    estado = db.Column(db.String(20), nullable=False, default='Pendiente')  # 
+    estado = db.Column(db.String(50), nullable=False, default='Pendiente')
     productos = db.relationship('ProductoGuiaRemision', backref='guia_remision', lazy=True)
     activo = db.Column(db.Boolean, default=True)
+    comentario = db.Column(db.Text, nullable=True)  # Comentario opcional
+    imagen_url = db.Column(db.String(255), nullable=True)  # Ruta de la imagen opcional
 
 class ProductoGuiaRemision(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -818,6 +829,7 @@ def obtener_ordenes_venta_guias():
             'cliente': orden.cliente,
             'fecha': orden.fecha,
             'total': sum([producto.cantidad for producto in orden.productos]), 
+            'numero_orden_compra': orden.numero_orden_compra,
             'guias': [
                 {
                     'numero_guia': guia.numero_guia,
@@ -866,21 +878,49 @@ def obtener_productos_de_guia(numero_guia):
     if not guia:
         return jsonify({'error': 'Guía no encontrada'}), 404
 
-    productos = [
-        {
+    productos = []
+    for producto in guia.productos:
+
+        producto_obj = db.session.get(Producto, producto.producto_orden.producto_id) if producto.producto_orden else None
+        nombre_producto = producto_obj.nombre if producto_obj else "Producto no encontrado"
+
+        productos.append({
             'id': producto.id,
-            'nombre': producto.producto.nombre,  # Aquí accedemos a 'producto.nombre' a través de la relación
+            'nombre': nombre_producto,
             'cantidad': producto.cantidad,
-            'estado': producto.estado  # Usamos 'estado' en lugar de 'entregado'
-        }
-        for producto in guia.productos  # Iteramos sobre los productos de la guía
-    ]
+            'estado': producto.estado
+        })
 
     return jsonify({
         'numero_guia': guia.numero_guia,
         'estado': guia.estado,
         'productos': productos
     })
+
+
+@app.route('/actualizar_guia/<int:numero_guia>', methods=['POST'])
+def actualizar_guia(numero_guia):
+    guia = db.session.get(GuiaRemision, numero_guia)
+    if not guia:
+        return jsonify({'error': 'Guía no encontrada'}), 404
+
+    estado = request.form.get('estado')
+    comentario = request.form.get('comentario')
+    imagen = request.files.get('imagen')
+
+    if estado:
+        guia.estado = estado
+    if comentario:
+        guia.comentario = comentario
+
+    if imagen and allowed_file(imagen.filename):
+        filename = secure_filename(imagen.filename)
+        imagen_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        imagen.save(imagen_path)
+        guia.imagen_url = f'/static/uploads/{filename}'
+
+    db.session.commit()
+    return jsonify({'mensaje': 'Guía actualizada correctamente'}), 200
 
 @app.route('/eliminar_guia/<int:guia_id>', methods=['DELETE', 'POST'])
 def eliminar_guia(guia_id):

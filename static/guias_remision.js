@@ -22,8 +22,8 @@ window.eliminarGuia = function(numeroGuia) {
 
 
 function cargarOrdenesYGuias() {
-        $.ajax({
-        url: '/ordenes_venta_guias',  // Asegurar que no se pase un numero_guia vacío
+    $.ajax({
+        url: '/ordenes_venta_guias',
         method: 'GET',
         success: function(ordenes) {
             let tbody = $('#ordenes-lista');
@@ -33,6 +33,7 @@ function cargarOrdenesYGuias() {
                 let ordenRow = `
                     <tr>
                         <td>${orden.id}</td>
+                        <td>${orden.numero_orden_compra}</td>  <!-- 🔥 Agregado aquí -->
                         <td>${orden.cliente}</td>
                         <td>${orden.fecha}</td>
                         <td>${orden.total}</td>
@@ -43,7 +44,6 @@ function cargarOrdenesYGuias() {
 
                 if (orden.guias && orden.guias.length > 0) {
                     orden.guias.forEach(function (guia) {
-                        console.log("Número de Guía:", guia.numero_guia);
                         let guiaRow = `
                             <tr class="guia-row" data-orden-id="${orden.id}" style="display:none;">
                                 <td colspan="2">Guía #${guia.numero_guia}</td>
@@ -61,7 +61,7 @@ function cargarOrdenesYGuias() {
                 } else {
                     let noGuiasRow = `
                         <tr class="guia-row" data-orden-id="${orden.id}">
-                            <td colspan="5">No hay guías de remisión asociadas a esta orden.</td>
+                            <td colspan="6">No hay guías de remisión asociadas a esta orden.</td>
                         </tr>
                     `;
                     tbody.append(noGuiasRow);
@@ -73,8 +73,8 @@ function cargarOrdenesYGuias() {
             alert('Hubo un error al cargar las órdenes de venta y guías de remisión.');
         }
     });
-
 }
+
 $(document).ready(function () {
     cargarOrdenesYGuias();
     

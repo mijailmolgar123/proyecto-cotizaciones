@@ -108,7 +108,6 @@
                     </button>
                 </div>
                 <div class="modal-body">
-                    <!-- Tabla para mostrar los productos dentro de la guía de remisión -->
                     <h5>Productos en la Guía</h5>
                     <table class="table table-striped">
                         <thead>
@@ -118,18 +117,35 @@
                                 <th>Estado</th>
                             </tr>
                         </thead>
-                        <tbody id="productos-guia-lista">
-                            <!-- Productos de la guía de remisión cargados dinámicamente -->
-                        </tbody>
+                        <tbody id="productos-guia-lista"></tbody>
                     </table>
+                
+                    <!-- Sección para actualizar el estado -->
+                    <h5>Actualizar Estado</h5>
+                    <select id="estadoGuia" class="form-control">
+                        <option value="Pendiente">Pendiente</option>
+                        <option value="Entregado">Entregado</option>
+                        <option value="Recibido">Recibido</option>
+                        <option value="Recibido con Observaciones">Recibido con Observaciones</option>
+                    </select>
+                
+                    <!-- Campo para comentarios -->
+                    <h5>Comentarios</h5>
+                    <textarea id="comentarioGuia" class="form-control" rows="3" placeholder="Escriba aquí..."></textarea>
+                
+                    <!-- Campo para subir imágenes -->
+                    <h5>Adjuntar Imagen</h5>
+                    <input type="file" id="imagenGuia" class="form-control-file">
+                    <img id="imagenPrevia" src="" class="img-fluid mt-2" style="max-width: 200px; display: none;">
+                
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                    <button class="btn btn-secondary" onclick="volverADetalleOrden()">Volver</button>
+                    <button type="button" class="btn btn-primary" id="guardarCambiosGuia">Guardar Cambios</button>
                 </div>
             </div>
         </div>
     </div>
-
 
     <!-- Cargar jQuery y Bootstrap desde CDN -->
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>

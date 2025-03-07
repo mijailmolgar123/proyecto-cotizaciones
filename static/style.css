@@ -87,3 +87,7 @@ body {
     white-space: nowrap;
     /* Evita que el texto se divida en varias líneas */
 }
+
+.modal-open {
+    overflow: scroll;
+}

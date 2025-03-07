@@ -66,8 +66,6 @@ $(document).ready(function () {
         });
     };
 
-
-
     // Mostrar los productos de la orden en la tabla
     function mostrarProductosOrden(productos) {
         let tbody = $('#productos-orden-lista');
@@ -189,8 +187,6 @@ $(document).ready(function () {
         });
     }
 
-
-
     // Generar una nueva guía de remisión
     window.generarGuiaRemision = function () {
         const numeroGuia = $('#numeroGuia').val();
@@ -247,23 +243,77 @@ $(document).ready(function () {
         });
     };
 
-
-    // Función para obtener el detalle de la guía de remisión
+   // Función para obtener el detalle de la guía de remisión
     window.verDetalleGuia = function (idGuia) {
+        if (!idGuia || isNaN(idGuia)) {
+            alert('Error: Número de Guía inválido.');
+            return;
+        }
+
+        // Guardar el modal anterior (orden de venta)
+        $('#detalleOrdenModal').modal('hide'); // Ocultar modal anterior
+        window.modalAnterior = '#detalleOrdenModal'; // Guardar referencia
+
         $.ajax({
-            url: `/guia_remision/${idGuia}/productos`,
+            url: `/obtener_detalle_guia/${idGuia}`,
             method: 'GET',
-            success: function (productos) {
-                console.log("Productos obtenidos de la guía:", productos); // Depuración
-                mostrarProductosGuia(productos);
-                $('#detalleGuiaModal').modal('show');  // Mostrar el modal con los productos
+            success: function (guia) {
+                let tbody = $('#productos-guia-lista');
+                tbody.empty();
+
+                guia.productos.forEach(function (producto) {
+                    let row = `
+                        <tr>
+                            <td>${producto.nombre}</td>
+                            <td>${producto.cantidad}</td>
+                            <td>${producto.estado}</td>
+                        </tr>
+                    `;
+                    tbody.append(row);
+                });
+
+                $('#estadoGuia').val(guia.estado);
+                $('#comentarioGuia').val(guia.comentario || '');
+
+                if (guia.imagen_url) {
+                    $('#imagenPrevia').attr('src', guia.imagen_url).show();
+                } else {
+                    $('#imagenPrevia').hide();
+                }
+                $('#imagenGuia').val("");  // Resetear input de archivo
+
+                // Almacenar número de guía en el modal
+                $('#detalleGuiaModal').data('numeroGuia', idGuia);
+                console.log("Número de guía almacenado en modal:", $('#detalleGuiaModal').data('numeroGuia'));
+
+                $('#detalleGuiaModal').modal('show');
             },
             error: function (error) {
-                console.error("Error al obtener los detalles de la guía:", error);
-                alert("Hubo un error al obtener los detalles de la guía.");
+                console.error('Error al obtener el detalle de la guía:', error);
+                alert('Hubo un error al obtener los detalles de la guía.');
             }
         });
     };
+
+    window.volverADetalleOrden = function () {
+    $('#detalleGuiaModal').modal('hide'); // Cerrar modal de guía de remisión
+
+        setTimeout(function () {
+                if (window.modalAnterior) {
+                    $(window.modalAnterior).modal('show'); // Mostrar el modal anterior
+                }
+            }, 500); // Retraso para evitar conflictos con Bootstrap
+    };
+
+
+    // Restaurar el desplazamiento cuando se cierre el modal de detalle de la guía
+    $('#detalleGuiaModal').on('hidden.bs.modal', function () {
+        if (!$('.modal.show').length) {  // Si no hay otros modales abiertos
+            $('body').removeClass('modal-open');
+            $('.modal-backdrop').remove();
+            $('body').css('padding-right', ''); 
+        }
+    });
 
     // Función para mostrar los productos de la guía en el modal
     function mostrarProductosGuia(productos) {
@@ -285,6 +335,83 @@ $(document).ready(function () {
             tbody.append('<tr><td colspan="3" class="text-center">No hay productos en esta guía.</td></tr>');
         }
     }
-
-
 });
+
+$('#guardarCambiosGuia').click(function() {
+    let numeroGuia = $('#detalleGuiaModal').data('numeroGuia'); // Obtener el número de guía
+    if (!numeroGuia || isNaN(numeroGuia)) {
+        alert('Error: Número de Guía no definido.');
+        return;
+    }
+
+    let estadoGuia = $('#estadoGuia').val();
+    let comentario = $('#comentarioGuia').val();
+    let imagenInput = $('#imagenGuia')[0];
+    let imagen = imagenInput && imagenInput.files.length > 0 ? imagenInput.files[0] : null;
+
+    let formData = new FormData();
+    formData.append('estado', estadoGuia);
+    formData.append('comentario', comentario);
+    if (imagen) {
+        formData.append('imagen', imagen);
+    }
+
+    $.ajax({
+        url: `/actualizar_guia/${numeroGuia}`,
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(response) {
+            alert('Guía actualizada correctamente.');
+
+            // 🔹 Restaurar el desplazamiento antes de volver al modal anterior
+            $('body').removeClass('modal-open');
+            $('.modal-backdrop').remove();
+            $('body').css('padding-right', ''); // Opcional: quitar el padding derecho que Bootstrap agrega
+
+            $('#detalleGuiaModal').modal('hide');
+
+            // 🔹 Recargar el detalle de la orden para reflejar los cambios
+            if (window.currentOrdenId) {
+                setTimeout(function () {
+                    verDetalleOrden(window.currentOrdenId); // Llama a la función para recargar los datos
+                }, 500); // Pequeño retraso para evitar conflictos visuales
+            }
+        },
+        error: function(error) {
+            console.error('Error al actualizar la guía:', error);
+            alert('Hubo un error al actualizar la guía.');
+        }
+    });
+});
+
+window.cargarOrdenesVenta = function () {
+    $.ajax({
+        url: '/ordenes_venta',
+        method: 'GET',
+        success: function (ordenes) {
+            let tbody = $('#ordenes-lista');
+            tbody.empty();
+
+            ordenes.forEach(function (orden) {
+                let row = `
+                    <tr>
+                        <td>${orden.cliente}</td>
+                        <td>${orden.solicitante}</td>
+                        <td>${orden.fecha_orden_compra || 'No definida'}</td>
+                        <td><span class="badge badge-${orden.estado === 'Pendiente' ? 'warning' : 'success'}">${orden.estado}</span></td>
+                        <td>${orden.estado_tiempo}</td>  
+                        <td>${orden.creado_por}</td>
+                        <td><button class="btn btn-primary" onclick="verDetalleOrden(${orden.id})">Ver Detalle</button></td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+        },
+        error: function (xhr, status, error) {
+            console.error('Error al cargar órdenes de Venta:', error);
+            alert('Hubo un problema al cargar las órdenes de Venta. Intenta de nuevo.');
+        }
+    });
+};
