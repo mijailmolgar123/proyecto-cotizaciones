@@ -3,25 +3,34 @@ $(document).ready(function() {
 
     function cargarCotizaciones() {
         $.ajax({
-            url: '/cotizaciones',  // Esta ruta debería devolver todas las cotizaciones
+            url: '/cotizaciones',  
             method: 'GET',
             success: function(cotizaciones) {
                 let tbody = $('#cotizaciones-lista');
-                tbody.empty();  // Vaciar la tabla antes de añadir nuevas filas
+                tbody.empty();  
 
-                // Iterar sobre cada cotización y construir las filas de la tabla
                 cotizaciones.forEach(function(cotizacion) {
+                    let estadoClass = 'secondary'; // Estado por defecto
+                    if (cotizacion.estado === 'Pendiente') estadoClass = 'warning';
+                    else if (cotizacion.estado === 'Finalizado Total') estadoClass = 'success';
+                    else if (cotizacion.estado === 'Finalizado Parcial') estadoClass = 'info';
+                    else if (cotizacion.estado === 'Rechazada') estadoClass = 'danger';
+
                     let row = `
                         <tr>
                             <td>${cotizacion.cliente}</td>
                             <td>${cotizacion.ruc}</td>
                             <td>${cotizacion.fecha}</td>
-                            <td><span class="badge badge-${cotizacion.estado === 'Pendiente' ? 'warning' : 'success'}">${cotizacion.estado}</span></td>
-                            <td>${cotizacion.creado_por}</td> <!-- Mostrar el creador de la cotización -->
-                            <td><button class="btn btn-primary" onclick="verDetalleCotizacion(${cotizacion.id})">Transformar a Orden de Venta</button></td>
+                            <td><span class="badge badge-${estadoClass}">${cotizacion.estado}</span></td>
+                            <td>${cotizacion.creado_por}</td> 
+                            <td>
+                                <button class="btn btn-primary" onclick="verDetalleCotizacion(${cotizacion.id})">
+                                    Transformar a Orden de Venta
+                                </button>
+                            </td>
                         </tr>
                     `;
-                    tbody.append(row);  // Añadir la fila al cuerpo de la tabla
+                    tbody.append(row);
                 });
             },
             error: function(xhr, status, error) {
@@ -37,7 +46,7 @@ $(document).ready(function() {
             method: 'GET',
             success: function(response) {
                 if (response.mensaje === 'Cotización ya convertida') {
-                    alert(`Esta cotización ya ha sido convertida en una orden de venta. Puedes verla en el listado de órdenes de venta (ID de la orden: ${response.orden_venta_id}).`);
+                    alert(`Esta cotización ya ha sido convertida en una orden de venta.`);
                     return;
                 }
 
@@ -65,8 +74,6 @@ $(document).ready(function() {
             }
         });
     };
-
-
 
     $('#transformar-orden-venta').click(function () {
         let numeroOrdenCompra = $('#numeroOrdenCompra').val();
@@ -111,5 +118,25 @@ $(document).ready(function() {
         } else {
             alert('Debe seleccionar al menos un producto.');
         }
+    });
+
+    // Nueva función para rechazar una cotización
+    $('#rechazar-cotizacion').click(function () {
+        if (!confirm("¿Está seguro de que desea rechazar esta cotización? Esta acción no se puede deshacer.")) {
+            return;
+        }
+
+        $.ajax({
+            url: `/rechazar_cotizacion/${window.currentCotizacionId}`,
+            method: 'POST',
+            success: function(response) {
+                alert('Cotización rechazada correctamente.');
+                $('#detalleCotizacionModal').modal('hide');
+                cargarCotizaciones();
+            },
+            error: function(error) {
+                alert('Hubo un problema al rechazar la cotización.');
+            }
+        });
     });
 });

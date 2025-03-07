@@ -45,7 +45,6 @@ login_manager.login_view = 'login'
 def load_user(user_id):
     return db.session.get(Usuario, int(user_id)) 
 
-
 class Usuario(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre_usuario = db.Column(db.String(50), unique=True, nullable=False)
@@ -181,13 +180,13 @@ class ProductoGuiaRemision(db.Model):
     activo = db.Column(db.Boolean, default=True)
     producto_orden = db.relationship('ProductoOrden', backref='productos_guias')
 
-
 # Método para registrar una actividad
 @app.route('/')
 def home():
     return render_template('login.html')
 
 @app.route('/gerente_dashboard')
+@login_required
 def gerente_dashboard():
     return render_template('gerente_dashboard.html')
 
@@ -482,6 +481,7 @@ def obtener_todas_las_cotizaciones():
     return jsonify(cotizaciones_data)
 
 @app.route('/transformar_orden_venta/<int:cotizacion_id>', methods=['POST'])
+@login_required
 def transformar_orden_venta(cotizacion_id):
     cotizacion = db.session.get(Cotizacion, cotizacion_id)
     if not cotizacion:
@@ -491,6 +491,10 @@ def transformar_orden_venta(cotizacion_id):
     datos = request.get_json()
     if not datos or 'productos' not in datos:
         return jsonify({'mensaje': 'Datos inválidos'}), 400
+
+    productos_seleccionados = datos['productos']
+    total_productos_cotizacion = len(cotizacion.productos)
+    total_productos_seleccionados = len(productos_seleccionados)
 
     # Crear nueva orden de Venta con los datos de la cotización
     nueva_orden = OrdenVenta(
@@ -502,7 +506,7 @@ def transformar_orden_venta(cotizacion_id):
         ruc=cotizacion.ruc,
         celular=cotizacion.celular,
         fecha=datetime.today().strftime('%d/%m/%Y'),
-        total=sum([float(prod['precio_total']) for prod in datos['productos']]),
+        total=sum([float(prod['precio_total']) for prod in productos_seleccionados]),
         estado='En Proceso',
         creado_por=current_user.id,
         numero_orden_compra=datos['numero_orden_compra'],
@@ -512,23 +516,39 @@ def transformar_orden_venta(cotizacion_id):
     db.session.commit()  # Commit para obtener el ID de la orden de compra
 
     # Añadir productos seleccionados a la orden de compra
-    for producto in datos['productos']:
+    for producto in productos_seleccionados:
         producto_orden = ProductoOrden(
             orden_id=nueva_orden.id,
             producto_id=producto['id'],
             cantidad=producto['cantidad'],
             precio_unitario=producto['precio_unitario'],
             precio_total=producto['precio_total'],
-            tipo_compra='stock',  # Por defecto, o podría ser modificado según la lógica
+            tipo_compra='stock',
             estado='Pendiente'
         )
         db.session.add(producto_orden)
 
-    # Cambiar el estado de la cotización a 'Finalizado'
-    cotizacion.estado = 'Finalizado'
+    # Determinar estado final de la cotización
+    if total_productos_seleccionados == total_productos_cotizacion:
+        cotizacion.estado = 'Finalizado Total'
+    else:
+        cotizacion.estado = 'Finalizado Parcial'
+
     db.session.commit()
 
     return jsonify({'mensaje': 'Orden de Venta generada correctamente.'}), 200
+
+@app.route('/rechazar_cotizacion/<int:cotizacion_id>', methods=['POST'])
+@login_required
+def rechazar_cotizacion(cotizacion_id):
+    cotizacion = db.session.get(Cotizacion, cotizacion_id)
+    if not cotizacion:
+        return jsonify({'mensaje': 'Cotización no encontrada'}), 404
+
+    cotizacion.estado = 'Rechazada'
+    db.session.commit()
+
+    return jsonify({'mensaje': 'Cotización rechazada correctamente.'}), 200
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -724,7 +744,7 @@ def obtener_guias_remision(orden_id):
 
     return jsonify([
         {
-            "id": guia.id,  # Asegurar que se envía el ID correcto
+            "id": guia.id, 
             "numero_guia": guia.numero_guia,
             "fecha_emision": guia.fecha_emision,
             "estado": guia.estado
@@ -734,7 +754,6 @@ def obtener_guias_remision(orden_id):
 
 @app.route('/orden_venta/<int:orden_id>/productos_remision', methods=['GET'])
 def obtener_productos_remision(orden_id):
-    print(f"📡 Recibida solicitud para obtener productos remitidos de la orden {orden_id}")
 
     productos_orden = ProductoOrden.query.filter_by(orden_id=orden_id).all()
     productos_suma = {}
@@ -747,7 +766,7 @@ def obtener_productos_remision(orden_id):
             or 0
         )
 
-        producto_info = Producto.query.get(producto.producto_id)
+        producto_info = db.session.get(Producto, producto.producto_id)
 
         productos_suma[producto.id] = {
             "nombre": producto_info.nombre if producto_info else "Producto no encontrado",
