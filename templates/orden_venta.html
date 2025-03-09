@@ -1,8 +1,15 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
 
-{% block title %}Órdenes de Venta{% endblock %}
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Órdenes de Venta</title>
+    <!-- Cargar Bootstrap desde CDN -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
 
-{% block content %}
+<body>
     <div class="container">
         <h1>Órdenes de Venta</h1>
         <!-- Tabla principal para mostrar las órdenes de venta -->
@@ -146,4 +153,8 @@
 
     <!-- Archivo JS personalizado -->
     <script src="{{ url_for('static', filename='orden_venta.js') }}"></script>
-{% endblock %}
+    <script src="{{ url_for('static', filename='base.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</body>
+
+</html>

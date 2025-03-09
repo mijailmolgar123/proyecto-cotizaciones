@@ -1,10 +1,10 @@
 document.addEventListener("DOMContentLoaded", function () {
-    const toggleSidebar = document.getElementById("toggle-sidebar");
-    const sidebar = document.getElementById("sidebar");
-    const mainContent = document.getElementById("main-content");
+    if (document.querySelector(".back-button")) return; // Evita que se duplique el botón
 
-    toggleSidebar.addEventListener("click", function () {
-        sidebar.classList.toggle("active");
-        mainContent.classList.toggle("shifted");
-    });
+    let backButton = document.createElement("a");
+    backButton.href = "/gerente_dashboard";  // Redirigir a la página principal
+    backButton.classList.add("back-button");
+
+    // Insertar el botón en el body sin afectar el diseño
+    document.body.appendChild(backButton);
 });

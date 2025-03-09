@@ -1,8 +1,4 @@
-document.addEventListener("DOMContentLoaded", function () {
-    console.log("Cotizaciones.js cargado correctamente.");
-});
-
-$(document).ready(function () {
+$(document).ready(function() {
     // Cuando el usuario escribe en el campo de búsqueda
     $('#buscar-producto').on('input', function() {
         let termino = $(this).val();
