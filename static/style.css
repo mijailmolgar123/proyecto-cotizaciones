@@ -1,59 +1,6 @@
-body {
-    font-family: Arial, sans-serif;
-    text-align: center;
-    padding: 50px;
-}
-
 .container {
     max-width: 100%;
     overflow: hidden;
-}
-
-.login-buttons button {
-    display: block;
-    width: 100%;
-    padding: 15px;
-    margin: 10px 0;
-    font-size: 18px;
-    cursor: pointer;
-}
-
-.back-button {
-    position: fixed;
-    /* Se fija en la pantalla sin alterar el diseño */
-    top: 15px;
-    left: 15px;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 24px;
-    /* Asegura que la flecha sea visible */
-    text-decoration: none;
-    color: white;
-    /* Asegura que la flecha sea blanca */
-    background: #333;
-    /* Fondo oscuro */
-    border-radius: 50%;
-    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
-    z-index: 9999;
-    cursor: pointer;
-    border: none;
-}
-
-/* Cambio de color al pasar el mouse */
-.back-button:hover {
-    background: #555;
-}
-
-/* Asegurar que haya una flecha dentro del botón */
-.back-button::before {
-    content: "←";
-    /* Agrega la flecha */
-    font-weight: bold;
-    color: white;
-    /* Asegura que la flecha sea visible */
 }
 
 /* Asegurar que el body no se expanda */
@@ -90,4 +37,104 @@ body {
 
 .modal-open {
     overflow: scroll;
+}
+/* Estilos generales */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* Barra superior */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background-color: #000;
+    /* Negro sólido */
+    color: white;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1001;
+    height: 56px;
+    align-items: center;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 250px;
+    background-color: #000;
+    color: white;
+    position: fixed;
+    top: 56px;
+    left: -250px;
+    height: calc(100% - 56px);
+    padding-top: 20px;
+    transition: left 0.3s;
+}
+
+.sidebar ul {
+    list-style: none;
+    padding: 0;
+}
+
+.sidebar ul li {
+    padding: 15px;
+    border-bottom: 1px solid #444;
+}
+
+.sidebar ul li a {
+    color: white;
+    text-decoration: none;
+    display: block;
+    cursor: pointer;
+}
+
+.sidebar ul li:hover {
+    background-color: #333;
+}
+
+.sidebar ul li.disabled {
+    color: #6c757d;
+    cursor: not-allowed;
+}
+
+/* Contenido principal */
+#main-content {
+    margin-left: 0;
+    transition: margin-left 0.3s;
+    width: 100%;
+    padding: 80px 20px 20px;
+    /* Aumentar espacio superior para que el título sea visible */
+}
+
+/* Estilos cuando el sidebar está abierto */
+.sidebar.active {
+    left: 0;
+}
+
+#main-content.shifted {
+    margin-left: 250px;
+}
+
+/* Responsividad */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        left: -100%;
+    }
+
+    #main-content.shifted {
+        margin-left: 0;
+    }
+}
+
+/* Eliminar la flecha de navegación */
+.back-button {
+    display: none;
 }
