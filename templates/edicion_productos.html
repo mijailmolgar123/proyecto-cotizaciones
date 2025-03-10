@@ -32,7 +32,9 @@
         <tbody id="productos-lista"></tbody>
     </table>
 </div>
-<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-<script src="{{ url_for('static', filename='edicion_productos.js') }}"></script>
+{% endblock %}
 
+{% block scripts %}
+<!-- Scripts específicos de ESTA página (se ejecutan después de Bootstrap.js) -->
+<script src="{{ url_for('static', filename='edicion_productos.js') }}"></script>
 {% endblock %}

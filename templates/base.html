@@ -5,12 +5,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Sistema de Gestión{% endblock %}</title>
+
+    <!-- CSS de Bootstrap -->
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Tu archivo style.css -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
 <body>
-
     <!-- Barra superior -->
     <nav class="navbar navbar-dark bg-dark">
         <button class="btn btn-outline-light" id="toggle-sidebar">☰</button>
@@ -36,8 +39,19 @@
         {% endblock %}
     </div>
 
+    <!-- Scripts comunes a todas las páginas -->
+    <!-- 1. jQuery -->
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <!-- 2. Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <!-- 3. Bootstrap (JS) -->
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <!-- Tu script base.js, si lo necesitas global -->
     <script src="{{ url_for('static', filename='base.js') }}"></script>
+
+    <!-- Bloque donde las plantillas hijas ponen sus scripts personalizados -->
+    {% block scripts %}{% endblock %}
 </body>
 
 </html>
