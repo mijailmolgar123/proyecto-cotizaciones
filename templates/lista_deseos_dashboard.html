@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Lista de Deseos{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Lista de Deseos</h1>
+
+    <div class="row">
+        <!-- Sección de datos de la lista en la parte superior -->
+        <div class="col-12">
+            <form id="form-datos-lista">
+                <div class="form-group">
+                    <label for="cliente">Cliente/Empresa:</label>
+                    <input type="text" class="form-control" id="cliente" placeholder="Empresa o persona solicitante"
+                        required>
+                </div>
+                <div class="form-group">
+                    <label for="ruc">RUC (opcional):</label>
+                    <input type="text" class="form-control" id="ruc">
+                </div>
+                <div class="form-group">
+                    <label for="prioridad">Prioridad:</label>
+                    <select class="form-control" id="prioridad">
+                        <option value="Normal">Normal</option>
+                        <option value="Alta">Alta</option>
+                        <option value="Baja">Baja</option>
+                    </select>
+                </div>
+                <!-- Comentario o estado, si deseas -->
+            </form>
+        </div>
+    </div>
+    <hr>
+
+    <div class="row">
+        <!-- Columna izquierda: Búsqueda de productos existentes -->
+        <div class="col-md-6">
+            <h4>Buscar Producto:</h4>
+            <input type="text" class="form-control" id="buscar-producto" placeholder="Ingrese nombre o código">
+            <table class="table table-striped mt-2">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nombre Producto</th>
+                        <th>Stock</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="productos-busqueda-lista">
+                    <!-- Resultados de búsqueda -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Columna derecha: Items de la Lista de Deseos -->
+        <div class="col-md-6">
+            <h4>Items en la Lista de Deseos</h4>
+            <table class="table table-striped mt-2">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nombre</th>
+                        <th>Stock</th>
+                        <th>Necesario</th>
+                        <th>Precio</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="lista-deseos-items">
+                    <!-- Se llena dinámicamente -->
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th colspan="4">Total</th>
+                        <th id="total-precio">0.00</th>
+                        <th></th>
+                    </tr>
+                </tfoot>
+            </table>
+            <!-- Botones finales -->
+            <button class="btn btn-success" id="btn-crear-lista" onclick="crearListaDeseosFinal()">Crear Lista de
+                Deseos</button>
+            <button class="btn btn-info" data-toggle="modal" data-target="#modalPreProducto">Crear Pre-Producto</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para crear Pre-Producto -->
+<div class="modal fade" id="modalPreProducto" tabindex="-1" role="dialog" aria-labelledby="modalPreProductoLabel"
+    aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalPreProductoLabel">Crear Pre-Producto</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="form-preproducto">
+                    <div class="form-group">
+                        <label for="nombre-preproducto">Nombre del Pre-Producto:</label>
+                        <input type="text" class="form-control" id="nombre-preproducto" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="precio-preproducto">Precio:</label>
+                        <input type="number" class="form-control" id="precio-preproducto" step="0.01" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="stock-preproducto">Stock Necesario:</label>
+                        <input type="number" class="form-control" id="stock-preproducto" value="1">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="crearItemPreProducto()">Agregar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='lista_deseos.js') }}"></script>
+{% endblock %}

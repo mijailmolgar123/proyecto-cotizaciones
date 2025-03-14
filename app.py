@@ -85,6 +85,10 @@ class Producto(db.Model):
     unidad = db.Column(db.String(80), nullable=True)
     creado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
     activo = db.Column(db.Boolean, default=True)
+     # Campos nuevos:
+    estado = db.Column(db.String(50), default='disponible') 
+    comentario = db.Column(db.Text, nullable=True)
+    tipo_producto = db.Column(db.String(20), default='NORMAL')
 
 class Cotizacion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -191,6 +195,142 @@ class ProductoGuiaRemision(db.Model):
     activo = db.Column(db.Boolean, default=True)
     producto_orden = db.relationship('ProductoOrden', backref='productos_guias')
 
+class ListaDeseos(db.Model):
+    __tablename__ = 'lista_deseos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cliente = db.Column(db.String(100), nullable=False)   # Empresa o nombre del cliente
+    ruc = db.Column(db.String(11), nullable=True)
+    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
+    creado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    prioridad = db.Column(db.String(20), default='Normal')
+    comentario = db.Column(db.Text, nullable=True)
+    estado = db.Column(db.String(20), default='Abierto')  
+    # 'Abierto', 'Procesando', 'Cerrado', etc.
+
+    # Relación 1 a N con ItemDeseo
+    items = db.relationship('ItemDeseo', backref='lista_deseos', lazy=True)
+
+class ItemDeseo(db.Model):
+    __tablename__ = 'item_deseo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    lista_deseos_id = db.Column(db.Integer, db.ForeignKey('lista_deseos.id'), nullable=False)
+
+    # Si existe 'producto_id', usaremos su nombre real. 
+    producto_id = db.Column(db.Integer, db.ForeignKey('producto.id'), nullable=True)
+    
+    # En caso de pre-producto
+    nombre_preproducto = db.Column(db.String(150), nullable=True)
+
+    cantidad_necesaria = db.Column(db.Integer, default=1)
+    precio_referencia = db.Column(db.Float, default=0.0)
+    
+    estado_item = db.Column(db.String(20), default='Pendiente') 
+    # Podrías usar: 'Pendiente', 'Cotizado', 'Descartado', etc.
+
+    # Relación opcional para el producto
+    producto = db.relationship('Producto', lazy=True)
+
+class CotizacionCompra(db.Model):
+    __tablename__ = 'cotizacion_compra'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    fecha = db.Column(db.DateTime, default=datetime.utcnow)
+    creado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    estado = db.Column(db.String(20), default='Abierto')
+    # Por ejemplo: 'Abierto', 'Cerrado', 'Cancelado'
+
+    # Opcionalmente, podrías relacionarlo con 'lista_deseos_id' si quieres vincular:
+    # lista_deseos_id = db.Column(db.Integer, db.ForeignKey('lista_deseos.id'), nullable=True)
+    
+    detalles = db.relationship('CotizacionCompraDetalle', backref='cotizacion_compra', lazy=True)
+
+class CotizacionCompraDetalle(db.Model):
+    __tablename__ = 'cotizacion_compra_detalle'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    cotizacion_compra_id = db.Column(db.Integer, db.ForeignKey('cotizacion_compra.id'), nullable=False)
+    
+    producto_id = db.Column(db.Integer, db.ForeignKey('producto.id'), nullable=False)
+    proveedor = db.Column(db.String(100), nullable=True)    # o una FK a tabla Proveedor
+    precio_unitario = db.Column(db.Float, nullable=False)
+    cantidad_solicitada = db.Column(db.Integer, nullable=False, default=1)
+    plazo_entrega_dias = db.Column(db.Integer, nullable=True)   # p.ej. 10 días
+    fecha_validez = db.Column(db.Date, nullable=True)           # Hasta cuándo es válido
+    estado = db.Column(db.String(20), default='Pendiente')  
+    # p.ej 'Pendiente', 'Aceptado', 'Rechazado'
+    
+    comentario = db.Column(db.String(255), nullable=True)
+    
+    # Relación con producto, si quieres
+    producto = db.relationship('Producto', lazy=True)
+
+class OrdenCompra(db.Model):
+    __tablename__ = 'orden_compra'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    fecha_orden = db.Column(db.DateTime, default=datetime.utcnow)
+    creado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    proveedor = db.Column(db.String(100), nullable=False)
+    estado = db.Column(db.String(20), default='Pendiente')
+    # p.ej: 'Pendiente', 'Recibido Parcial', 'Cerrada'
+    
+    # Relación 1 a N con ProductoOrdenCompra
+    productos = db.relationship('ProductoOrdenCompra', backref='orden_compra', lazy=True)
+
+class ProductoOrdenCompra(db.Model):
+    __tablename__ = 'producto_orden_compra'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    orden_compra_id = db.Column(db.Integer, db.ForeignKey('orden_compra.id'), nullable=False)
+    producto_id = db.Column(db.Integer, db.ForeignKey('producto.id'), nullable=False)
+    
+    cantidad = db.Column(db.Integer, nullable=False)
+    precio_unitario = db.Column(db.Float, nullable=False)
+    
+    estado = db.Column(db.String(20), default='Pendiente')
+    # p.ej: 'Pendiente', 'Recibido', 'En Camino'
+    
+    comentario = db.Column(db.String(255), nullable=True)
+    
+    # Relación con producto
+    producto = db.relationship('Producto', lazy=True)
+
+class GuiaRemisionCompra(db.Model):
+    __tablename__ = 'guia_remision_compra'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    orden_compra_id = db.Column(db.Integer, db.ForeignKey('orden_compra.id'), nullable=False)
+    
+    numero_guia = db.Column(db.String(100), nullable=False, unique=True)
+    fecha_emision = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    estado = db.Column(db.String(20), default='Pendiente')  
+    # 'Pendiente', 'Recibido Parcial', 'Recibido Total'
+    
+    comentario = db.Column(db.Text, nullable=True)
+    activo = db.Column(db.Boolean, default=True)
+    
+    productos = db.relationship('ProductoGuiaRemisionCompra', backref='guia_remision_compra', lazy=True)
+    
+    # Relación con la OrdenCompra si quieres:
+    orden_compra = db.relationship('OrdenCompra', lazy=True)
+
+class ProductoGuiaRemisionCompra(db.Model):
+    __tablename__ = 'producto_guia_remision_compra'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    guia_remision_compra_id = db.Column(db.Integer, db.ForeignKey('guia_remision_compra.id'), nullable=False)
+    producto_orden_compra_id = db.Column(db.Integer, db.ForeignKey('producto_orden_compra.id'), nullable=False)
+    cantidad_recibida = db.Column(db.Integer, nullable=False, default=0)
+    
+    estado = db.Column(db.String(20), default='Pendiente')
+    activo = db.Column(db.Boolean, default=True)
+    
+    # Relación con el detalle de la orden (para saber cuál producto/cantidad se está recibiendo)
+    producto_orden_compra = db.relationship('ProductoOrdenCompra', lazy=True)
+
 # Método para registrar una actividad
 @app.route('/')
 def home():
@@ -239,26 +379,41 @@ def guias_remision():
 
     return render_template('guias_remision.html', guias=guias)
 
+@app.route('/lista_deseos_dashboard')
+@login_required
+def lista_deseos_dashboard():
+    # Renderiza una plantilla, por ejemplo "lista_deseos_dashboard.html"
+    return render_template('lista_deseos_dashboard.html')
+
 @app.route('/productos', methods=['POST'])
 def crear_producto():
     data = request.get_json()
-    print(data) 
+    
     nuevo_producto = Producto(
         nombre=data['nombre'],
-        descripcion=data['descripcion'],
+        descripcion=data.get('descripcion', 'Pre-producto generado en cotización'),
         precio=data['precio'],
-        stock=data['stock'],
-        proveedor=data['proveedor'],
-        sucursal=data['sucursal'],
-        almacen=data['almacen'],
-        codigo_item=data['codigo_item'],
-        codigo_barra=data['codigo_barra'],
-        unidad=data['unidad'],
-        creado_por=current_user.id
+        stock=data.get('stock', 0),
+        proveedor=data.get('proveedor', ''),
+        sucursal=data.get('sucursal', ''),
+        almacen=data.get('almacen', ''),
+        codigo_item=data.get('codigo_item', ''),
+        codigo_barra=data.get('codigo_barra', ''),
+        unidad=data.get('unidad', 'UND'),
+        creado_por=current_user.id,
+        # Campos para pre-producto
+        tipo_producto=data.get('tipo_producto', 'NORMAL'),
+        estado=data.get('estado', 'Disponible'),
+        comentario=data.get('comentario', '')
     )
     db.session.add(nuevo_producto)
     db.session.commit()
-    return jsonify({'mensaje': 'Producto añadido con éxito'}), 201
+    
+    # Devolver también el ID para poder agregarlo al carrito
+    return jsonify({
+        'mensaje': 'Producto añadido con éxito',
+        'id': nuevo_producto.id
+    }), 201
 
 @app.route('/productos', methods=['GET'])
 def obtener_productos():
@@ -965,6 +1120,102 @@ def obtener_guias_por_orden(orden_id):
         }
         for guia in guias
     ])
+
+@app.route('/lista_deseos', methods=['POST'])
+@login_required
+def crear_lista_deseos():
+    data = request.get_json()
+    nueva_lista = ListaDeseos(
+        cliente=data['cliente'],
+        ruc=data.get('ruc', ''),
+        creado_por=current_user.id,
+        prioridad=data.get('prioridad', 'Normal'),
+        comentario=data.get('comentario', ''),
+        # estado se queda en 'Abierto' por defecto
+    )
+    db.session.add(nueva_lista)
+    db.session.commit()
+    return jsonify({'mensaje': 'Lista de Deseos creada', 'id': nueva_lista.id}), 201
+
+@app.route('/lista_deseos/<int:lista_id>', methods=['GET'])
+@login_required
+def obtener_lista_deseos(lista_id):
+    lista = db.session.get(ListaDeseos, lista_id)
+    if not lista:
+        return jsonify({'error': 'No existe esta lista'}), 404
+    
+    items_data = []
+    for item in lista.items:
+        if item.producto:
+            # Si hay producto real
+            items_data.append({
+                'id': item.id,
+                'producto_id': item.producto_id,
+                'nombre': item.producto.nombre,
+                'cantidad_necesaria': item.cantidad_necesaria,
+                'precio_referencia': item.precio_referencia,
+                'estado_item': item.estado_item
+            })
+        else:
+            # Pre-producto
+            items_data.append({
+                'id': item.id,
+                'producto_id': None,
+                'nombre': item.nombre_preproducto,
+                'cantidad_necesaria': item.cantidad_necesaria,
+                'precio_referencia': item.precio_referencia,
+                'estado_item': item.estado_item
+            })
+    
+    lista_data = {
+        'id': lista.id,
+        'cliente': lista.cliente,
+        'ruc': lista.ruc,
+        'fecha_creacion': lista.fecha_creacion.isoformat(),
+        'prioridad': lista.prioridad,
+        'comentario': lista.comentario,
+        'estado': lista.estado,
+        'items': items_data
+    }
+    return jsonify(lista_data), 200
+
+@app.route('/lista_deseos/crear_con_items', methods=['POST'])
+@login_required
+def crear_lista_deseos_con_items():
+    data = request.json
+
+    # 1) Crear la lista de deseos
+    nueva_lista = ListaDeseos(
+        cliente=data['cliente'],
+        ruc=data.get('ruc', ''),
+        prioridad=data.get('prioridad', 'Normal'),
+        creado_por=current_user.id
+    )
+    db.session.add(nueva_lista)
+    db.session.commit()  # Para obtener nueva_lista.id
+
+    # 2) Recorrer los items
+    for item in data.get('items', []):
+        producto_id = item.get('producto_id')  # puede ser None si no existía
+        nombre_pre = item.get('nombre_preproducto')  # si es un pre-producto
+        cantidad = item.get('cantidad_necesaria', 1)
+        precio_ref = item.get('precio_referencia', 0.0)
+
+        nuevo_item = ItemDeseo(
+            lista_deseos_id=nueva_lista.id,
+            producto_id=producto_id,  # si es None, quedará null
+            nombre_preproducto=nombre_pre,
+            cantidad_necesaria=cantidad,
+            precio_referencia=precio_ref
+        )
+        db.session.add(nuevo_item)
+
+    db.session.commit()
+
+    return jsonify({
+       'mensaje': 'Lista de deseos creada con éxito',
+       'lista_deseos_id': nueva_lista.id
+    }), 201
 
 # Crear la tabla si no existe
 with app.app_context():

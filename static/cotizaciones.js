@@ -161,3 +161,52 @@ function obtenerProductosDeCotizacion() {
     });
     return productos;
 }
+
+function crearPreProducto() {
+    let nombre = $('#nombre-preproducto').val().trim();
+    let precio = parseFloat($('#precio-preproducto').val()) || 0;
+    let stockInicial = parseInt($('#stock-preproducto').val()) || 0;
+
+    if (!nombre) {
+        alert("El nombre del pre-producto es obligatorio.");
+        return;
+    }
+
+    // Construir el cuerpo de la petición
+    let data = {
+        nombre: nombre,
+        precio: precio,
+        stock: stockInicial,
+        tipo_producto: "PRE",   // <--- para que se sepa que es un pre-producto
+        descripcion: "Producto creado durante la cotización",
+        comentario: "Generado al vuelo en la interfaz de cotizaciones"
+    };
+
+    $.ajax({
+        url: '/productos',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        success: function(response) {
+            // response.mensaje, response.id
+            let nuevoId = response.id;
+            alert(response.mensaje);
+            // Cerrar el modal
+            $('#modalPreProducto').modal('hide');
+            
+            // Limpia los campos del modal
+            $('#nombre-preproducto').val('');
+            $('#precio-preproducto').val('0');
+            $('#stock-preproducto').val('0');
+
+            // Agregar a la "orden de venta" automáticamente
+            // para reusar tu misma función
+            agregarAOrden(nuevoId);
+        },
+        error: function(error) {
+            console.error('Error al crear pre-producto:', error);
+            alert('Hubo un error al crear el pre-producto.');
+        }
+    });
+}
+
