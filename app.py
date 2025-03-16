@@ -31,7 +31,7 @@ def create_app():
         os.makedirs(os.path.join(basedir, 'instance'))
 
     # Configuración de la base de datos
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:mijail28@localhost/proyecto_cotizaciones'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:HQX4meI4pYJGGxP2WL7w@proyecto-cotizaciones-db.c09o2u6em92b.us-east-1.rds.amazonaws.com:5432/proyecto_cotizaciones'
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {}
 
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
