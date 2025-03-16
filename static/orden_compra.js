@@ -1,0 +1,236 @@
+let cotizacionesPendientes = [];
+let productosSeleccionados = [];  // items de la cotización actual
+let currentCotizacionId = null;
+
+document.addEventListener('DOMContentLoaded', function(){
+    cargarCotizacionesPendientes();
+
+    // Manejar el submit del form modal
+    document.getElementById('form-orden-compra').addEventListener('submit', function(e){
+        e.preventDefault();
+        crearOrdenCompra();
+    });
+    document.getElementById('buscar-producto').addEventListener('input', function(){
+        let termino = this.value.trim();
+        buscarCotizacionesPorProducto(termino);
+    });
+
+});
+
+function cargarCotizacionesPendientes(){
+    $.ajax({
+        url: '/cotizaciones_compra_pendientes',
+        method: 'GET',
+        success: function(response){
+            cotizacionesPendientes = response;
+            renderCotizacionesPendientes();
+        },
+        error: function(err){
+            console.error("Error al cargar cotizaciones pendientes", err);
+        }
+    });
+}
+
+function renderCotizacionesPendientes() {
+    let tbody = $('#cotizaciones-lista');
+    tbody.empty();
+
+    cotizacionesPendientes.forEach(ct => {
+        // Sub-lista (ya la tienes) ...
+        let productsHTML = '';
+        if (ct.productos && ct.productos.length > 0) {
+            ct.productos.forEach(prod => {
+                productsHTML += `
+                    <li>
+                        <strong>${prod.nombre_producto}</strong> — 
+                        Precio: ${prod.precio_ofrecido}, Cant: ${prod.cantidad}
+                    </li>
+                `;
+            });
+        } else {
+            productsHTML = `<li>No hay productos que coincidan en esta cotización.</li>`;
+        }
+
+        // Fila principal
+        let rowPrincipal = `
+        <tr>
+            <td>${ct.cotizacion_id}</td>
+            <td>${ct.proveedor}</td>
+            <td>${ct.estado}</td>
+            <td>
+                <button class="btn btn-info" onclick="verDetalleCotizacion(${ct.cotizacion_id})">
+                    Ver Detalle
+                </button>
+                <!-- Agregamos el botón Rechazar -->
+                <button class="btn btn-danger ml-2" onclick="rechazarCotizacionCompra(${ct.cotizacion_id})">
+                    Rechazar
+                </button>
+            </td>
+        </tr>
+        `;
+
+        let rowProductos = `
+        <tr style="background-color: #f9f9f9;">
+            <td colspan="4">
+                <ul style="list-style-type: disc; margin-left: 25px;">
+                    ${productsHTML}
+                </ul>
+            </td>
+        </tr>
+        `;
+
+        tbody.append(rowPrincipal);
+        tbody.append(rowProductos);
+    });
+}
+
+
+// A simple toggler:
+function toggleDetalle(btn){
+    let tr = $(btn).closest('tr');
+    let detailRow = tr.next('.detalle');
+    detailRow.toggleClass('hidden');
+}
+
+
+function verDetalleCotizacion(cotId){
+    // Buscar la cotizacion
+    let coti = cotizacionesPendientes.find(x => x.cotizacion_id === cotId);
+    if(!coti){
+        alert("Cotización no encontrada en la lista local.");
+        return;
+    }
+    currentCotizacionId = coti.cotizacion_id;
+
+    let tbody = $('#productos-cotizacion-lista');
+    tbody.empty();
+    coti.productos.forEach(prod => {
+        // Mantén un "checkbox" o un "Agregar" si quieres permitir parcial
+        // o para simplificar, siempre tomamos su precio/cantidad
+        let row = `
+        <tr>
+            <td>${prod.nombre_producto || 'Producto sin nombre'}</td>
+            <td>${prod.precio_ofrecido}</td>
+            <td>${prod.cantidad}</td>
+            <td>
+                <input type="checkbox" class="sel-prod" data-id="${prod.id_detalle}" checked>
+            </td>
+        </tr>
+        `;
+        tbody.append(row);
+    });
+}
+
+function mostrarModalOrdenCompra(){
+    if(!currentCotizacionId){
+        alert("Primero seleccione una cotización de compra.");
+        return;
+    }
+    $('#cotizacion_compra_id').val(currentCotizacionId);
+    $('#numero_orden').val("");
+    $('#fecha_orden').val("");
+    $('#observaciones').val("");
+    $('#modalOrdenCompra').modal('show');
+}
+
+function crearOrdenCompra(){
+    let cotId = $('#cotizacion_compra_id').val();
+    let numeroOrden = $('#numero_orden').val().trim();
+    let fechaOrden = $('#fecha_orden').val();
+    let obs = $('#observaciones').val().trim();
+
+    if(!numeroOrden){
+        alert("Debe ingresar el número de orden.");
+        return;
+    }
+    if(!fechaOrden){
+        alert("Debe ingresar la fecha de orden.");
+        return;
+    }
+
+    // Recoger los productos seleccionados
+    let seleccion = [];
+    $('#productos-cotizacion-lista tr').each(function(){
+        let check = $(this).find('.sel-prod');
+        if(check && check.is(':checked')){
+            let idDetalle = check.data('id');
+            seleccion.push({ id_detalle: idDetalle });
+        }
+    });
+
+    if(seleccion.length === 0){
+        alert("No se seleccionó ningún producto para la orden.");
+        return;
+    }
+
+    let dataOrden = {
+        cotizacion_compra_id: parseInt(cotId),
+        numero_orden: numeroOrden,
+        fecha_orden: fechaOrden,
+        observaciones: obs,
+        productos: seleccion
+    };
+
+    $.ajax({
+        url: '/orden_compra/crear_desde_cotizacion',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(dataOrden),
+        success: function(resp){
+            alert(resp.mensaje);
+            // Cerrar modal
+            $('#modalOrdenCompra').modal('hide');
+            // Quitar la cotización ya procesada de la vista
+            cotizacionesPendientes = cotizacionesPendientes.filter(x => x.cotizacion_id != cotId);
+            renderCotizacionesPendientes();
+            // Limpiar la derecha
+            $('#productos-cotizacion-lista').empty();
+            currentCotizacionId = null;
+        },
+        error: function(err){
+            console.error("Error al crear la Orden de Compra", err);
+            alert("Error al crear la Orden de Compra.");
+        }
+    });
+}
+
+function buscarCotizacionesPorProducto(termino){
+    let url = '/cotizaciones_compra_buscar';
+    if(termino){
+        url += '?termino=' + encodeURIComponent(termino);
+    }
+    $.ajax({
+        url: url,
+        method: 'GET',
+        success: function(response){
+            // 'response' = array de cotizaciones
+            // Renderizamos con la misma lógica 'renderCotizacionesPendientes' 
+            // O creamos 'renderCotizacionesSearch'
+            cotizacionesPendientes = response;
+            renderCotizacionesPendientes(); // Reutilizamos la función
+        },
+        error: function(err){
+            console.error("Error al buscar cotizaciones por producto:", err);
+        }
+    });
+}
+
+function rechazarCotizacionCompra(cotId) {
+    if (!confirm("¿Estás seguro de rechazar esta cotización de compra?")) {
+        return;
+    }
+    $.ajax({
+        url: `/cotizacion_compra/rechazar/${cotId}`,
+        method: 'POST',
+        success: function(resp) {
+            alert(resp.mensaje);
+            // Remover la cotización rechazada de cotizacionesPendientes:
+            cotizacionesPendientes = cotizacionesPendientes.filter(x => x.cotizacion_id != cotId);
+            renderCotizacionesPendientes();
+        },
+        error: function(err) {
+            console.error("Error al rechazar la cotización de compra:", err);
+            alert("Hubo un error al rechazar la cotización.");
+        }
+    });
+}

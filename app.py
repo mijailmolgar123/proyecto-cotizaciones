@@ -234,68 +234,72 @@ class ItemDeseo(db.Model):
 
 class CotizacionCompra(db.Model):
     __tablename__ = 'cotizacion_compra'
-    
+
     id = db.Column(db.Integer, primary_key=True)
-    fecha = db.Column(db.DateTime, default=datetime.utcnow)
+    proveedor = db.Column(db.String(100), nullable=False)
+    ruc_proveedor = db.Column(db.String(15), nullable=True)
+    forma_pago = db.Column(db.String(100), nullable=True)
+    fecha_oferta = db.Column(db.Date, nullable=True)
+    validez_dias = db.Column(db.Integer, nullable=True)
+    plazo_entrega_dias = db.Column(db.Integer, nullable=True)
     creado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
     estado = db.Column(db.String(20), default='Abierto')
-    # Por ejemplo: 'Abierto', 'Cerrado', 'Cancelado'
 
-    # Opcionalmente, podrías relacionarlo con 'lista_deseos_id' si quieres vincular:
-    # lista_deseos_id = db.Column(db.Integer, db.ForeignKey('lista_deseos.id'), nullable=True)
-    
-    detalles = db.relationship('CotizacionCompraDetalle', backref='cotizacion_compra', lazy=True)
+    # Relación corregida:
+    productos_cotizados = db.relationship('ProductoCotizacionCompra', back_populates='cotizacion', lazy=True)
 
-class CotizacionCompraDetalle(db.Model):
-    __tablename__ = 'cotizacion_compra_detalle'
-    
+class ProductoCotizacionCompra(db.Model):
+    __tablename__ = 'producto_cotizacion_compra'
+
     id = db.Column(db.Integer, primary_key=True)
     cotizacion_compra_id = db.Column(db.Integer, db.ForeignKey('cotizacion_compra.id'), nullable=False)
-    
-    producto_id = db.Column(db.Integer, db.ForeignKey('producto.id'), nullable=False)
-    proveedor = db.Column(db.String(100), nullable=True)    # o una FK a tabla Proveedor
-    precio_unitario = db.Column(db.Float, nullable=False)
-    cantidad_solicitada = db.Column(db.Integer, nullable=False, default=1)
-    plazo_entrega_dias = db.Column(db.Integer, nullable=True)   # p.ej. 10 días
-    fecha_validez = db.Column(db.Date, nullable=True)           # Hasta cuándo es válido
+    item_deseo_id = db.Column(db.Integer, db.ForeignKey('item_deseo.id'), nullable=False)
+    precio_ofrecido = db.Column(db.Float, nullable=False)
+    cantidad = db.Column(db.Integer, nullable=False)
+
+    # NUEVO:
     estado = db.Column(db.String(20), default='Pendiente')  
-    # p.ej 'Pendiente', 'Aceptado', 'Rechazado'
-    
-    comentario = db.Column(db.String(255), nullable=True)
-    
-    # Relación con producto, si quieres
-    producto = db.relationship('Producto', lazy=True)
+    # 'Pendiente', 'Comprado', 'Descartado', etc.
+
+    cotizacion = db.relationship('CotizacionCompra', back_populates='productos_cotizados')
+    item_deseo = db.relationship('ItemDeseo', backref='productos_cotizados')
 
 class OrdenCompra(db.Model):
     __tablename__ = 'orden_compra'
     
     id = db.Column(db.Integer, primary_key=True)
-    fecha_orden = db.Column(db.DateTime, default=datetime.utcnow)
-    creado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+    cotizacion_compra_id = db.Column(db.Integer, db.ForeignKey('cotizacion_compra.id'), nullable=True)
+
+    numero_orden = db.Column(db.String(50), nullable=False)
+    fecha_orden = db.Column(db.Date, nullable=False)
+    observaciones = db.Column(db.Text, nullable=True)
+
     proveedor = db.Column(db.String(100), nullable=False)
     estado = db.Column(db.String(20), default='Pendiente')
-    # p.ej: 'Pendiente', 'Recibido Parcial', 'Cerrada'
+    # p.ej: 'Pendiente', 'Recibido Parcial', 'Cerrado'
     
-    # Relación 1 a N con ProductoOrdenCompra
+    creado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
+
+    # Relación 1 a N con ProductoOrdenCompra (detalle)
     productos = db.relationship('ProductoOrdenCompra', backref='orden_compra', lazy=True)
+
+    # Relación 1 a 1 con la cotización de compra
+    cotizacion_compra = db.relationship('CotizacionCompra', backref='orden_compra', lazy=True)
 
 class ProductoOrdenCompra(db.Model):
     __tablename__ = 'producto_orden_compra'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     orden_compra_id = db.Column(db.Integer, db.ForeignKey('orden_compra.id'), nullable=False)
-    producto_id = db.Column(db.Integer, db.ForeignKey('producto.id'), nullable=False)
-    
-    cantidad = db.Column(db.Integer, nullable=False)
-    precio_unitario = db.Column(db.Float, nullable=False)
-    
+
+    cotizacion_compra_item_id = db.Column(db.Integer, db.ForeignKey('producto_cotizacion_compra.id'), nullable=True)
+    # si deseas saber exactamente a cuál item de la cotización apunta
+
+    item_deseo_id = db.Column(db.Integer, db.ForeignKey('item_deseo.id'), nullable=True)
+    precio_unitario = db.Column(db.Float, nullable=False, default=0)
+    cantidad = db.Column(db.Integer, nullable=False, default=1)
     estado = db.Column(db.String(20), default='Pendiente')
-    # p.ej: 'Pendiente', 'Recibido', 'En Camino'
-    
-    comentario = db.Column(db.String(255), nullable=True)
-    
-    # Relación con producto
-    producto = db.relationship('Producto', lazy=True)
+    # etc.
 
 class GuiaRemisionCompra(db.Model):
     __tablename__ = 'guia_remision_compra'
@@ -382,8 +386,17 @@ def guias_remision():
 @app.route('/lista_deseos_dashboard')
 @login_required
 def lista_deseos_dashboard():
-    # Renderiza una plantilla, por ejemplo "lista_deseos_dashboard.html"
     return render_template('lista_deseos_dashboard.html')
+
+@app.route('/cotizaciones_compra_dashboard')
+@login_required
+def cotizaciones_compra_dashboard():
+    return render_template('cotizaciones_compra_dashboard.html')
+
+@app.route('/orden_compra_dashboard')
+@login_required
+def orden_compra_dashboard():
+    return render_template('orden_compra_dashboard.html')
 
 @app.route('/productos', methods=['POST'])
 def crear_producto():
@@ -825,7 +838,7 @@ def obtener_orden(orden_id):
 
 @app.route('/actualizar_estado_producto/<int:producto_id>', methods=['PUT'])
 def actualizar_estado_producto(producto_id):
-    producto = Producto.query.get(producto_id)
+    producto = db.session.get(Producto, producto_id)
     if not producto:
         return jsonify({'mensaje': 'Producto no encontrado'}), 404
 
@@ -841,7 +854,7 @@ def actualizar_estado_producto(producto_id):
 
 @app.route('/actualizar_estado_orden/<int:orden_id>', methods=['PUT'])
 def actualizar_estado_orden(orden_id):
-    orden = OrdenVenta.query.get(orden_id)
+    orden = db.session.get(OrdenVenta, orden_id)
     if not orden:
         return jsonify({'mensaje': 'Orden no encontrada'}), 404
 
@@ -891,7 +904,7 @@ def crear_guia_remision(orden_id):
 @app.route('/productos/<int:producto_id>/stock', methods=['GET'])
 def obtener_stock_producto(producto_id):
     # Obtener el producto de la base de datos
-    producto = Producto.query.get(producto_id)
+    producto = db.session.get(Producto, producto_id)
     if not producto:
         return jsonify({'mensaje': 'Producto no encontrado'}), 404
     # Lógica para obtener el stock y calcular los productos disponibles para envío y los que se necesitan pedir
@@ -1216,6 +1229,302 @@ def crear_lista_deseos_con_items():
        'mensaje': 'Lista de deseos creada con éxito',
        'lista_deseos_id': nueva_lista.id
     }), 201
+
+@app.route('/items_deseo_pendientes', methods=['GET'])
+@login_required
+def items_deseo_pendientes():
+    """
+    Devuelve un JSON con los items de deseo que estén en estado 'Pendiente' o 'Abierto'.
+    Incluye el ID de la lista, el nombre del cliente y la info del item (id, producto, etc.).
+    """
+    # Ejemplo sencillo: buscar ItemDeseo con estado='Pendiente'
+    pendientes = (db.session.query(ItemDeseo)
+                  .join(ListaDeseos, ListaDeseos.id == ItemDeseo.lista_deseos_id)
+                  .filter(ListaDeseos.estado != 'Cerrado')  # o como manejes
+                  .all())
+    
+    data = []
+    for item in pendientes:
+        # Podrías agrupar por lista o devolver un array plano
+        lista = item.lista_deseos
+        # Nombre de producto
+        nombre_prod = None
+        stock_disp = 0
+        if item.producto_id and item.producto:
+            nombre_prod = item.producto.nombre
+            stock_disp = item.producto.stock
+        elif item.nombre_preproducto:
+            nombre_prod = item.nombre_preproducto
+
+        data.append({
+            'item_deseo_id': item.id,
+            'lista_id': lista.id,
+            'cliente': lista.cliente,
+            'nombre_lista': f"Lista #{lista.id} - {lista.cliente}",
+            'nombre_producto': nombre_prod,
+            'stock_disponible': stock_disp,
+            'cantidad_necesaria': item.cantidad_necesaria,
+            'precio_referencia': item.precio_referencia
+        })
+    return jsonify(data), 200
+
+@app.route('/cotizacion_compra/crear_con_items', methods=['POST'])
+@login_required
+def crear_cotizacion_compra():
+    data = request.get_json()
+    nueva_cot = CotizacionCompra(
+        proveedor=data['proveedor'],
+        ruc_proveedor=data.get('ruc_proveedor', ''),
+        forma_pago=data.get('forma_pago', ''),
+        fecha_oferta=data.get('fecha_oferta'),  # si es un YYYY-MM-DD string
+        validez_dias=data.get('validez_dias'),
+        creado_por=current_user.id,
+        # nuevo campo
+        plazo_entrega_dias=data.get('plazo_entrega_dias')
+        # por ej. lo almacenas en la columna "plazo_entrega_dias"
+    )
+    db.session.add(nueva_cot)
+    db.session.commit()
+
+    # Insertar los detalles ...
+    for det in data.get('items', []):
+        db.session.add(ProductoCotizacionCompra(
+            cotizacion_compra_id=nueva_cot.id,
+            item_deseo_id=det['item_deseo_id'],
+            precio_ofrecido=det['precio_ofrecido'],
+            cantidad=det['cantidad']
+        ))
+    db.session.commit()
+
+    return jsonify({'mensaje': 'Cotización de Compra creada', 'id': nueva_cot.id}), 201
+
+@app.route('/cotizaciones_compra_pendientes', methods=['GET'])
+@login_required
+def cotizaciones_compra_pendientes():
+    """
+    Devuelve todas las cotizaciones de compra que no estén en estado 'Procesada' o 'Cerrada'.
+    Incluye detalles de productos.
+    """
+    cotizaciones = CotizacionCompra.query.filter(
+        CotizacionCompra.estado.notin_(["Procesada", "Cerrada", "Rechazada"])
+    ).all()
+
+    data = []
+    for c in cotizaciones:
+        productos = []
+        for p in c.productos_cotizados:
+            productos.append({
+                'id_detalle': p.id,
+                'item_deseo_id': p.item_deseo_id,
+                'nombre_producto': p.item_deseo.producto.nombre if p.item_deseo.producto else p.item_deseo.nombre_preproducto,
+                'precio_ofrecido': p.precio_ofrecido,
+                'cantidad': p.cantidad
+            })
+
+        data.append({
+            'cotizacion_id': c.id,
+            'proveedor': c.proveedor,
+            'ruc_proveedor': c.ruc_proveedor,
+            'estado': c.estado,
+            'plazo_entrega_dias': c.plazo_entrega_dias,
+            'fecha_oferta': str(c.fecha_oferta) if c.fecha_oferta else None,
+            'productos': productos
+        })
+    return jsonify(data), 200
+
+@app.route('/orden_compra/crear_desde_cotizacion', methods=['POST'])
+@login_required
+def crear_orden_compra_desde_cotizacion():
+    """
+    data = {
+      cotizacion_compra_id: X,
+      numero_orden: str,
+      fecha_orden: 'YYYY-MM-DD',
+      observaciones: str,
+      productos: [
+         { id_detalle: X, cotizacion_compra_item_id: X, precio_ofrecido, cantidad },
+         ...
+      ]
+    }
+    """
+    data = request.json
+    cotizacion_id = data.get('cotizacion_compra_id')
+    if not cotizacion_id:
+        return jsonify({'error': 'Falta cotizacion_compra_id'}), 400
+
+    # 1. Obtener la cotización de compra
+    cotizacion_compra = db.session.get(CotizacionCompra, cotizacion_id)
+    if not cotizacion_compra:
+        return jsonify({'error': 'Cotización de compra no encontrada'}), 404
+
+    # 2. Crear la OrdenCompra
+    nueva_orden = OrdenCompra(
+        cotizacion_compra_id=cotizacion_compra.id, 
+        numero_orden=data['numero_orden'],
+        fecha_orden=data['fecha_orden'],
+        observaciones=data.get('observaciones', ''),
+        proveedor=cotizacion_compra.proveedor,  # o data.get('proveedor'), si deseas
+        estado='Pendiente',
+        creado_por=current_user.id
+    )
+    db.session.add(nueva_orden)
+    db.session.commit()
+
+    # 3. Añadir los productos a ProductoOrdenCompra
+    productos_recibidos = data.get('productos', [])
+    cantidad_total_cotizacion = len(cotizacion_compra.productos_cotizados)
+    cantidad_seleccionada = len(productos_recibidos)
+
+    for prod in productos_recibidos:
+        # Buscar el detalle en la cotización (por si quieres)
+        detalle = db.session.get(ProductoCotizacionCompra, prod['id_detalle'])
+        if not detalle:
+            continue
+
+        detalle.estado = 'Comprado'
+        detalle.item_deseo.estado = 'Ordenado'
+
+        nuevo_producto_orden = ProductoOrdenCompra(
+            orden_compra_id=nueva_orden.id,
+            cotizacion_compra_item_id=detalle.id,  # referenciamos para saber de cuál item cotizado proviene
+            item_deseo_id=detalle.item_deseo_id,
+            precio_unitario=detalle.precio_ofrecido,
+            cantidad=detalle.cantidad
+        )
+        db.session.add(nuevo_producto_orden)
+
+        otros_detalles = db.session.query(ProductoCotizacionCompra).filter(
+            ProductoCotizacionCompra.item_deseo_id == detalle.item_deseo_id,
+            ProductoCotizacionCompra.id != detalle.id,
+            ProductoCotizacionCompra.estado == 'Pendiente'
+        ).all()
+        for od in otros_detalles:
+            od.estado = 'Descartado'
+
+        # Marcar ItemDeseo como "Ordenado"
+        detalle.item_deseo.estado = 'Ordenado'
+
+    # 4. Determinar el nuevo estado de la Cotización
+    # si la cantidad_seleccionada < cantidad_total_cotizacion => 'Procesada Parcial'
+    # si son iguales => 'Procesada'
+    if cantidad_seleccionada == cantidad_total_cotizacion:
+        cotizacion_compra.estado = 'Procesada'
+    else:
+        cotizacion_compra.estado = 'Procesada Parcial'
+
+    db.session.commit()
+
+    return jsonify({'mensaje': 'Orden de Compra creada satisfactoriamente', 'orden_id': nueva_orden.id}), 201
+
+@app.route('/cotizaciones_compra_buscar', methods=['GET'])
+@login_required
+def cotizaciones_compra_buscar():
+    """
+    Devuelve las Cotizaciones de Compra y sus productos que coincidan con el término de búsqueda 
+    en el nombre del producto (item_deseo.producto.nombre o item_deseo.nombre_preproducto).
+    Si no se envía 'termino', devuelve todas las cotizaciones en estado no procesado.
+    """
+    termino = request.args.get('termino', '').strip().lower()
+
+    # 1. Buscar todas las cotizaciones 'pendientes' o 'abiertas'
+    query = CotizacionCompra.query.filter(
+        CotizacionCompra.estado.notin_(["Procesada", "Cerrada", "Rechazada"])
+    )
+    cotizaciones = query.all()
+
+    # 2. Si no hay término, devolvemos directamente TODAS las cotizaciones pendientes
+    if not termino:
+        # Construimos la respuesta con TODOS sus productos
+        data = []
+        for c in cotizaciones:
+            productos_json = []
+            for p in c.productos_cotizados:
+                # Obtener nombre
+                if p.estado == 'Descartado':
+                    continue
+                if p.item_deseo.producto:
+                    nombre_prod = p.item_deseo.producto.nombre
+                else:
+                    nombre_prod = p.item_deseo.nombre_preproducto or "Producto sin nombre"
+
+                productos_json.append({
+                    'id_detalle': p.id,
+                    'nombre_producto': nombre_prod,
+                    'precio_ofrecido': p.precio_ofrecido,
+                    'cantidad': p.cantidad
+                })
+            
+            data.append({
+                'cotizacion_id': c.id,
+                'proveedor': c.proveedor,
+                'estado': c.estado,
+                'plazo_entrega_dias': c.plazo_entrega_dias,
+                'productos': productos_json
+            })
+        
+        return jsonify(data), 200
+    
+    # 3. Si SÍ hay término, filtramos manualmente en cada cotización
+    cotizaciones_filtradas = []
+    for c in cotizaciones:
+        productos_match = []
+        for p in c.productos_cotizados:
+            # Obtener el nombre
+            if p.item_deseo.producto:
+                nombre_prod = p.item_deseo.producto.nombre.lower()
+            elif p.item_deseo.nombre_preproducto:
+                nombre_prod = p.item_deseo.nombre_preproducto.lower()
+            else:
+                nombre_prod = ""
+
+            # Ver si el término aparece en el nombre
+            if nombre_prod and (termino in nombre_prod):
+                productos_match.append(p)
+
+        # Si hubo coincidencias, añadimos la cotización y SOLO esos productos al resultado,
+        # sin alterar c.productos_cotizados en el objeto real
+        if productos_match:
+            cotizaciones_filtradas.append((c, productos_match))
+
+    # 4. Construir la respuesta con las coincidencias
+    data = []
+    for (c, matches) in cotizaciones_filtradas:
+        productos_json = []
+        for p in matches:
+            if p.item_deseo.producto:
+                nombre_prod = p.item_deseo.producto.nombre
+            else:
+                nombre_prod = p.item_deseo.nombre_preproducto or "Producto sin nombre"
+            
+            productos_json.append({
+                'id_detalle': p.id,
+                'nombre_producto': nombre_prod,
+                'precio_ofrecido': p.precio_ofrecido,
+                'cantidad': p.cantidad
+            })
+        
+        data.append({
+            'cotizacion_id': c.id,
+            'proveedor': c.proveedor,
+            'estado': c.estado,
+            'plazo_entrega_dias': c.plazo_entrega_dias,
+            'productos': productos_json
+        })
+
+    return jsonify(data), 200
+
+@app.route('/cotizacion_compra/rechazar/<int:cot_id>', methods=['POST'])
+@login_required
+def rechazar_cotizacion_compra(cot_id):
+    cotizacion = db.session.get(CotizacionCompra, cot_id)
+    if not cotizacion:
+        return jsonify({'error': 'Cotización no encontrada'}), 404
+
+    # Cambiamos estado a 'Rechazada'
+    cotizacion.estado = 'Rechazada'
+    db.session.commit()
+
+    return jsonify({'mensaje': 'Cotización rechazada con éxito'}), 200
 
 # Crear la tabla si no existe
 with app.app_context():

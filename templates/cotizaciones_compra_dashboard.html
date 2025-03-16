@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Cotizaciones de Compra{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Cotizaciones de Compra</h1>
+
+    <div class="row">
+        <!-- Columna izquierda: ítems de la lista de deseos pendientes -->
+        <div class="col-md-6">
+            <h4>Items Pendientes (Lista de Deseos)</h4>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Lista #</th>
+                        <th>Producto</th>
+                        <th>Stock Disp</th>
+                        <th>Necesario</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="items-pendientes-lista">
+                    <!-- Se llena con AJAX -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Columna derecha: la cotización de compra que se está armando -->
+        <div class="col-md-6">
+            <h4>Crear Cotización para Compra</h4>
+            <form id="form-cotizacion-compra">
+                <!-- ... Dentro de la sección derecha ... -->
+                <div class="form-group">
+                    <label for="proveedor">Proveedor:</label>
+                    <input type="text" class="form-control" id="proveedor" required>
+                </div>
+                <div class="form-group">
+                    <label for="ruc_proveedor">RUC del Proveedor:</label>
+                    <input type="text" class="form-control" id="ruc_proveedor">
+                </div>
+                <div class="form-group">
+                    <label for="forma_pago">Forma de Pago:</label>
+                    <input type="text" class="form-control" id="forma_pago">
+                </div>
+                <div class="form-group">
+                    <label for="fecha_oferta">Fecha de la Oferta:</label>
+                    <input type="date" class="form-control" id="fecha_oferta">
+                </div>
+                <div class="form-group">
+                    <label for="validez_dias">Validez (días):</label>
+                    <input type="number" class="form-control" id="validez_dias">
+                </div>
+                
+                <!-- Añade el nuevo campo para plazo de entrega general de la cotización -->
+                <div class="form-group">
+                    <label for="plazo_entrega_dias">Plazo de Entrega (días):</label>
+                    <input type="number" class="form-control" id="plazo_entrega_dias">
+                </div>
+                
+                <h5>Ítems de esta Cotización</h5>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Precio Ofrecido</th>
+                            <th>Cantidad</th>
+                            <!-- Quitamos la columna de "Fecha Entrega" -->
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cotizacion-compra-items">
+                        <!-- Items que se añaden -->
+                    </tbody>
+                </table>
+                <button class="btn btn-success" onclick="guardarCotizacionCompra()">Guardar Cotización</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='cotizaciones_compra.js') }}"></script>
+{% endblock %}

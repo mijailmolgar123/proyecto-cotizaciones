@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Ordenes de Compra{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Órdenes de Compra</h1>
+    <div class="row">
+
+        <!-- Columna Izquierda: Cotizaciones de Compra Pendientes -->
+        <div class="col-md-6">
+            <h4>Cotizaciones Pendientes</h4>
+            <input type="text" id="buscar-producto" class="form-control" placeholder="Buscar producto...">
+            <br>
+            <table class="table table-striped mt-3">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Proveedor</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="cotizaciones-lista">
+                    <!-- Se llena vía AJAX -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Columna Derecha: Detalle (productos) + Generar Orden -->
+        <div class="col-md-6">
+            <h4>Productos de la Cotización Seleccionada</h4>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Precio</th>
+                        <th>Cantidad</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="productos-cotizacion-lista">
+                    <!-- Llenado vía JS -->
+                </tbody>
+            </table>
+
+            <!-- Botón para Generar Orden de Compra -->
+            <button class="btn btn-primary" onclick="mostrarModalOrdenCompra()">Generar Orden de Compra</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para datos de la Orden de Compra -->
+<div class="modal fade" id="modalOrdenCompra" tabindex="-1" role="dialog" aria-labelledby="modalOrdenCompraLabel"
+    aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <form id="form-orden-compra">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalOrdenCompraLabel">Crear Orden de Compra</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="cotizacion_compra_id">
+                    <div class="form-group">
+                        <label for="numero_orden">Número de Orden:</label>
+                        <input type="text" class="form-control" id="numero_orden" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="fecha_orden">Fecha Orden:</label>
+                        <input type="date" class="form-control" id="fecha_orden" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="observaciones">Observaciones:</label>
+                        <textarea class="form-control" id="observaciones"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Orden</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='orden_compra.js') }}"></script>
+{% endblock %}
