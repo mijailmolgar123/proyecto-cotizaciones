@@ -1,4 +1,4 @@
-# Ignorar entorno virtual
+.git
 venv/
 __pycache__/
 migrations/

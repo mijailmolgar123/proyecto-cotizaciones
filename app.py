@@ -10,28 +10,70 @@ from flask import request, jsonify
 from datetime import datetime
 from flask import Flask, render_template, redirect, url_for
 from werkzeug.utils import secure_filename
+from dotenv import load_dotenv
+import boto3
+import json
 
 app = Flask(__name__)
 
 UPLOAD_FOLDER = 'static/uploads/'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def get_secret():
+    secret_name = "RDS-segurimax-db"
+    region_name = "us-east-1"
+
+    session = boto3.session.Session()
+    client = session.client('secretsmanager', region_name=region_name)
+
+    try:
+        response = client.get_secret_value(SecretId=secret_name)
+    except client.exceptions.ResourceNotFoundException:
+        print(f"El secreto {secret_name} no fue encontrado.")
+        return None
+    except client.exceptions.ClientError as e:
+        print(f"Error al obtener el secreto: {e}")
+        return None
+
+    # El secreto es un dict con: username, password, engine, host, port, dbname, etc.
+    secret_dict = json.loads(response['SecretString'])
+
+    # Construimos la cadena al estilo:
+    # postgresql+psycopg2://username:password@host:port/dbname
+    user = secret_dict["username"]
+    password = secret_dict["password"]
+    engine = secret_dict["engine"]   # "postgres" por ejemplo
+    host = secret_dict["host"]
+    port = secret_dict["port"]
+    dbname = secret_dict["dbname"]
+
+    db_uri = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{dbname}"
+    return db_uri
+
 def create_app():
 
     # Obtener la ruta absoluta del directorio actual
+    load_dotenv()
+     
     basedir = os.path.abspath(os.path.dirname(__file__))
 
     # Asegúrate de que la carpeta 'instance' exista
     if not os.path.exists(os.path.join(basedir, 'instance')):
         os.makedirs(os.path.join(basedir, 'instance'))
+    
+    # Intenta obtener la URI de la base de datos desde AWS Secrets Manager
+    db_uri = get_secret()
+
+    # Si no se pudo obtener el secreto, usa una variable de entorno local como fallback
+    if not db_uri:
+        db_uri = os.getenv('DATABASE_URI', 'fallback') 
 
     # Configuración de la base de datos
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:HQX4meI4pYJGGxP2WL7w@proyecto-cotizaciones-db.c09o2u6em92b.us-east-1.rds.amazonaws.com:5432/proyecto_cotizaciones'
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {}
 
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -1544,4 +1586,5 @@ with app.app_context():
     db.session.commit()
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
+
