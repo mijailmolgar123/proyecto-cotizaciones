@@ -5,7 +5,7 @@ FROM python:3.9-slim
 WORKDIR /app
 
 # Instalar dependencias del sistema necesarias para compilar psycopg2
-RUN apt-get update && apt-get install -y libpq-dev gcc
+#RUN apt-get update && apt-get install -y libpq-dev gcc
 
 # Copiar y instalar las dependencias de Python
 COPY requirements.txt .
