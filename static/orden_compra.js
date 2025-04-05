@@ -1,6 +1,7 @@
 let cotizacionesPendientes = [];
 let productosSeleccionados = [];  // items de la cotización actual
 let currentCotizacionId = null;
+let cotizacionesOriginales = [];
 
 document.addEventListener('DOMContentLoaded', function(){
     cargarCotizacionesPendientes();
@@ -22,7 +23,8 @@ function cargarCotizacionesPendientes(){
         url: '/cotizaciones_compra_pendientes',
         method: 'GET',
         success: function(response){
-            cotizacionesPendientes = response;
+            cotizacionesOriginales = response;  // backup sin filtro
+            cotizacionesPendientes = [...response]; // copia filtrable
             renderCotizacionesPendientes();
         },
         error: function(err){
@@ -55,16 +57,15 @@ function renderCotizacionesPendientes() {
         let rowPrincipal = `
         <tr>
             <td>${ct.cotizacion_id}</td>
-            <td>${ct.proveedor}</td>
+            <td>
+                ${ct.proveedor}<br>
+                <small><strong>Pago:</strong> ${ct.forma_pago || '-'}</small><br>
+                <small><strong>Entrega:</strong> ${ct.plazo_entrega_dias || '-'} días</small>
+            </td>
             <td>${ct.estado}</td>
             <td>
-                <button class="btn btn-info" onclick="verDetalleCotizacion(${ct.cotizacion_id})">
-                    Ver Detalle
-                </button>
-                <!-- Agregamos el botón Rechazar -->
-                <button class="btn btn-danger ml-2" onclick="rechazarCotizacionCompra(${ct.cotizacion_id})">
-                    Rechazar
-                </button>
+                <button class="btn btn-info" onclick="verDetalleCotizacion(${ct.cotizacion_id})">Ver Detalle</button>
+                <button class="btn btn-danger ml-2" onclick="rechazarCotizacionCompra(${ct.cotizacion_id})">Rechazar</button>
             </td>
         </tr>
         `;
@@ -95,9 +96,9 @@ function toggleDetalle(btn){
 
 function verDetalleCotizacion(cotId){
     // Buscar la cotizacion
-    let coti = cotizacionesPendientes.find(x => x.cotizacion_id === cotId);
+    let coti = cotizacionesOriginales.find(x => x.cotizacion_id === cotId);
     if(!coti){
-        alert("Cotización no encontrada en la lista local.");
+        alert("Cotización no encontrada.");
         return;
     }
     currentCotizacionId = coti.cotizacion_id;
@@ -182,7 +183,7 @@ function crearOrdenCompra(){
             $('#modalOrdenCompra').modal('hide');
             // Quitar la cotización ya procesada de la vista
             cotizacionesPendientes = cotizacionesPendientes.filter(x => x.cotizacion_id != cotId);
-            renderCotizacionesPendientes();
+            cargarCotizacionesPendientes();
             // Limpiar la derecha
             $('#productos-cotizacion-lista').empty();
             currentCotizacionId = null;
@@ -195,24 +196,31 @@ function crearOrdenCompra(){
 }
 
 function buscarCotizacionesPorProducto(termino){
-    let url = '/cotizaciones_compra_buscar';
-    if(termino){
-        url += '?termino=' + encodeURIComponent(termino);
+    if (!termino) {
+        // Si está vacío, muestra todo desde el backup
+        cotizacionesPendientes = [...cotizacionesOriginales];
+        renderCotizacionesPendientes();
+        return;
     }
-    $.ajax({
-        url: url,
-        method: 'GET',
-        success: function(response){
-            // 'response' = array de cotizaciones
-            // Renderizamos con la misma lógica 'renderCotizacionesPendientes' 
-            // O creamos 'renderCotizacionesSearch'
-            cotizacionesPendientes = response;
-            renderCotizacionesPendientes(); // Reutilizamos la función
-        },
-        error: function(err){
-            console.error("Error al buscar cotizaciones por producto:", err);
+
+    // Filtro en frontend
+    let resultado = [];
+
+    cotizacionesOriginales.forEach(cot => {
+        let productosFiltrados = cot.productos.filter(prod =>
+            prod.nombre_producto.toLowerCase().includes(termino.toLowerCase())
+        );
+
+        if (productosFiltrados.length > 0) {
+            resultado.push({
+                ...cot,
+                productos: productosFiltrados
+            });
         }
     });
+
+    cotizacionesPendientes = resultado;
+    renderCotizacionesPendientes();
 }
 
 function rechazarCotizacionCompra(cotId) {

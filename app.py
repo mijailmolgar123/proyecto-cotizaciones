@@ -13,6 +13,9 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import boto3
 import json
+from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy import text
 
 app = Flask(__name__)
 
@@ -66,7 +69,8 @@ def create_app():
         os.makedirs(os.path.join(basedir, 'instance'))
     
     # Intenta obtener la URI de la base de datos desde AWS Secrets Manager
-    db_uri = get_secret()
+    # db_uri = get_secret()
+    db_uri = "postgresql+psycopg2://postgres:HQX4meI4pYJGGxP2WL7w@proyecto-cotizaciones-db.c09o2u6em92b.us-east-1.rds.amazonaws.com:5432/proyecto_cotizaciones"
 
     # Si no se pudo obtener el secreto, usa una variable de entorno local como fallback
     if not db_uri:
@@ -131,6 +135,7 @@ class Producto(db.Model):
     estado = db.Column(db.String(50), default='disponible') 
     comentario = db.Column(db.Text, nullable=True)
     tipo_producto = db.Column(db.String(20), default='NORMAL')
+    search_vector = db.Column(TSVECTOR)
 
 class Cotizacion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -470,26 +475,39 @@ def crear_producto():
         'id': nuevo_producto.id
     }), 201
 
+from sqlalchemy import func
+
 @app.route('/productos', methods=['GET'])
 def obtener_productos():
+    """
+    Endpoint con paginación y Full-Text Search (FTS) en PostgreSQL.
+    - Parámetros: page, per_page, termino
+    - Devuelve: { productos, total, paginas, pagina_actual }
+    """
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     termino = request.args.get('termino', '', type=str).strip()
 
+    # Base query: solo productos activos
     query = Producto.query.filter(Producto.activo == True)
 
+    # Si hay término, aplicar FTS:
     if termino:
         query = query.filter(
-            db.or_(
-                Producto.nombre.ilike(f"%{termino}%"),
-                Producto.codigo_item.ilike(f"%{termino}%")
-            )
+            Producto.search_vector.op('@@')(func.plainto_tsquery('spanish', termino))
         )
 
-    productos_paginados = query.order_by(Producto.id.asc()).paginate(page=page, per_page=per_page, error_out=False)
+    # Paginamos la query
+    productos_paginados = query.order_by(Producto.id.asc()).paginate(
+        page=page, 
+        per_page=per_page, 
+        error_out=False
+    )
 
-    productos_json = [
-        {
+    # Armamos la respuesta JSON
+    productos_json = []
+    for p in productos_paginados.items:
+        productos_json.append({
             'id': p.id,
             'nombre': p.nombre,
             'descripcion': p.descripcion,
@@ -502,9 +520,7 @@ def obtener_productos():
             'codigo_barra': p.codigo_barra,
             'unidad': p.unidad,
             'activo': p.activo
-        }
-        for p in productos_paginados.items
-    ]
+        })
 
     return jsonify({
         'productos': productos_json,
@@ -572,35 +588,52 @@ def desactivar_producto(id):
 
 @app.route('/productos/buscar', methods=['GET'])
 def buscar_productos():
-    termino = request.args.get('termino', '').strip()
-    if not termino:  # Si no hay búsqueda, mostrar los primeros 20 productos ordenados por ID
-        productos = Producto.query.filter(Producto.activo == True).order_by(Producto.id.asc()).limit(20).all()
-    else:  # Si hay búsqueda, filtrar y limitar a 20 coincidencias
-        productos = Producto.query.filter(
-            Producto.activo == True,
-            db.or_(
-                Producto.nombre.ilike(f"%{termino}%"),
-                Producto.codigo_item.ilike(f"%{termino}%")
-            )
-        ).order_by(Producto.id.asc()).limit(20).all()  # Filtra y ordena por ID ascendente
 
-    productos_json = [
-        {
-            'id': p.id,
-            'nombre': p.nombre,
-            'descripcion': p.descripcion,
-            'precio': p.precio,
-            'stock': p.stock,
-            'proveedor': p.proveedor,
-            'sucursal': p.sucursal,
-            'almacen': p.almacen,
-            'codigo_item': p.codigo_item,
-            'codigo_barra': p.codigo_barra,
-            'unidad': p.unidad,
-            'activo': p.activo
-        }
-        for p in productos
-    ]
+    termino = request.args.get('termino', '').strip()
+
+    # 1) Si no hay término => mostrar primeros 20
+    if not termino:
+        sql = text("""
+            SELECT *
+            FROM producto
+            WHERE activo = TRUE
+            ORDER BY id ASC
+            LIMIT 20
+        """)
+        result = db.session.execute(sql)
+        rows = result.mappings().all()  # row-by-row, como diccionario
+    else:
+        # 2) Si SÍ hay término => Full-Text Search con search_vector
+        sql = text("""
+            SELECT * FROM producto
+            WHERE activo = TRUE
+            AND to_tsvector('spanish', nombre || ' ' || descripcion)
+                @@ plainto_tsquery('spanish', :termino)
+            ORDER BY id
+            LIMIT :limit
+            OFFSET :offset
+        """)
+        result = db.session.execute(sql, {'termino': termino})
+        rows = result.mappings().all()
+
+    # Mapeamos cada fila a JSON
+    productos_json = []
+    for row in rows:
+        productos_json.append({
+            'id': row['id'],
+            'nombre': row['nombre'],
+            'descripcion': row['descripcion'],
+            'precio': row['precio'],
+            'stock': row['stock'],
+            'proveedor': row['proveedor'],
+            'sucursal': row['sucursal'],
+            'almacen': row['almacen'],
+            'codigo_item': row['codigo_item'],
+            'codigo_barra': row['codigo_barra'],
+            'unidad': row['unidad'],
+            'activo': row['activo']
+        })
+
     return jsonify(productos_json)
 
 @app.route('/guardar_cotizacion', methods=['POST'])
@@ -1282,9 +1315,8 @@ def items_deseo_pendientes():
     # Ejemplo sencillo: buscar ItemDeseo con estado='Pendiente'
     pendientes = (db.session.query(ItemDeseo)
                   .join(ListaDeseos, ListaDeseos.id == ItemDeseo.lista_deseos_id)
-                  .filter(ListaDeseos.estado != 'Cerrado')  # o como manejes
                   .all())
-    
+    #.filter(ListaDeseos.estado == 'Pendiente')
     data = []
     for item in pendientes:
         # Podrías agrupar por lista o devolver un array plano
@@ -1344,24 +1376,26 @@ def crear_cotizacion_compra():
 @login_required
 def cotizaciones_compra_pendientes():
     """
-    Devuelve todas las cotizaciones de compra que no estén en estado 'Procesada' o 'Cerrada'.
-    Incluye detalles de productos.
+    Devuelve todas las cotizaciones de compra que no estén 'Cerradas', 'Rechazadas'
+    ni 'Procesada' ni 'Procesada Parcial'.
     """
+    # Agrega "Procesada Parcial" en la lista
     cotizaciones = CotizacionCompra.query.filter(
-        CotizacionCompra.estado.notin_(["Procesada", "Cerrada", "Rechazada"])
+        CotizacionCompra.estado.notin_([
+            "Procesada", "Cerrada", "Rechazada", "Procesada Parcial"
+        ])
     ).all()
 
     data = []
     for c in cotizaciones:
-        productos = []
-        for p in c.productos_cotizados:
-            productos.append({
-                'id_detalle': p.id,
-                'item_deseo_id': p.item_deseo_id,
-                'nombre_producto': p.item_deseo.producto.nombre if p.item_deseo.producto else p.item_deseo.nombre_preproducto,
-                'precio_ofrecido': p.precio_ofrecido,
-                'cantidad': p.cantidad
-            })
+        # Solo productos en estado Pendiente
+        productos_pend = [
+            p for p in c.productos_cotizados 
+            if p.estado == 'Pendiente'
+        ]
+        # Si no hay productos pendientes, omite
+        if not productos_pend:
+            continue
 
         data.append({
             'cotizacion_id': c.id,
@@ -1370,89 +1404,89 @@ def cotizaciones_compra_pendientes():
             'estado': c.estado,
             'plazo_entrega_dias': c.plazo_entrega_dias,
             'fecha_oferta': str(c.fecha_oferta) if c.fecha_oferta else None,
-            'productos': productos
+            'forma_pago': c.forma_pago,
+            'productos': [
+                {
+                    'id_detalle': p.id,
+                    'item_deseo_id': p.item_deseo_id,
+                    'nombre_producto': p.item_deseo.producto.nombre 
+                        if p.item_deseo.producto else p.item_deseo.nombre_preproducto,
+                    'precio_ofrecido': p.precio_ofrecido,
+                    'cantidad': p.cantidad
+                } 
+                for p in productos_pend
+            ]
         })
+
     return jsonify(data), 200
 
 @app.route('/orden_compra/crear_desde_cotizacion', methods=['POST'])
 @login_required
 def crear_orden_compra_desde_cotizacion():
-    """
-    data = {
-      cotizacion_compra_id: X,
-      numero_orden: str,
-      fecha_orden: 'YYYY-MM-DD',
-      observaciones: str,
-      productos: [
-         { id_detalle: X, cotizacion_compra_item_id: X, precio_ofrecido, cantidad },
-         ...
-      ]
-    }
-    """
     data = request.json
     cotizacion_id = data.get('cotizacion_compra_id')
-    if not cotizacion_id:
-        return jsonify({'error': 'Falta cotizacion_compra_id'}), 400
+    productos = data.get('productos', []) 
 
-    # 1. Obtener la cotización de compra
+    if not cotizacion_id or not productos:
+        return jsonify({'error': 'Faltan datos obligatorios'}), 400
+
     cotizacion_compra = db.session.get(CotizacionCompra, cotizacion_id)
     if not cotizacion_compra:
         return jsonify({'error': 'Cotización de compra no encontrada'}), 404
 
-    # 2. Crear la OrdenCompra
     nueva_orden = OrdenCompra(
         cotizacion_compra_id=cotizacion_compra.id, 
         numero_orden=data['numero_orden'],
         fecha_orden=data['fecha_orden'],
         observaciones=data.get('observaciones', ''),
-        proveedor=cotizacion_compra.proveedor,  # o data.get('proveedor'), si deseas
+        proveedor=cotizacion_compra.proveedor,
         estado='Pendiente',
         creado_por=current_user.id
     )
     db.session.add(nueva_orden)
     db.session.commit()
 
-    # 3. Añadir los productos a ProductoOrdenCompra
-    productos_recibidos = data.get('productos', [])
-    cantidad_total_cotizacion = len(cotizacion_compra.productos_cotizados)
-    cantidad_seleccionada = len(productos_recibidos)
+    ids_seleccionados = [p['id_detalle'] for p in productos]
+    detalles_procesados = []
 
-    for prod in productos_recibidos:
-        # Buscar el detalle en la cotización (por si quieres)
-        detalle = db.session.get(ProductoCotizacionCompra, prod['id_detalle'])
+    for id_det in ids_seleccionados:
+        detalle = db.session.get(ProductoCotizacionCompra, id_det)
         if not detalle:
             continue
 
         detalle.estado = 'Comprado'
         detalle.item_deseo.estado = 'Ordenado'
+        detalles_procesados.append(detalle)
 
         nuevo_producto_orden = ProductoOrdenCompra(
             orden_compra_id=nueva_orden.id,
-            cotizacion_compra_item_id=detalle.id,  # referenciamos para saber de cuál item cotizado proviene
+            cotizacion_compra_item_id=detalle.id,
             item_deseo_id=detalle.item_deseo_id,
             precio_unitario=detalle.precio_ofrecido,
             cantidad=detalle.cantidad
         )
         db.session.add(nuevo_producto_orden)
 
-        otros_detalles = db.session.query(ProductoCotizacionCompra).filter(
+        # Buscar otros detalles con mismo item_deseo_id (excepto el actual) y marcar como DESCARTADO
+        otros = ProductoCotizacionCompra.query.filter(
             ProductoCotizacionCompra.item_deseo_id == detalle.item_deseo_id,
             ProductoCotizacionCompra.id != detalle.id,
             ProductoCotizacionCompra.estado == 'Pendiente'
         ).all()
-        for od in otros_detalles:
-            od.estado = 'Descartado'
 
-        # Marcar ItemDeseo como "Ordenado"
-        detalle.item_deseo.estado = 'Ordenado'
+        for otro in otros:
+            otro.estado = 'Descartado'
 
-    # 4. Determinar el nuevo estado de la Cotización
-    # si la cantidad_seleccionada < cantidad_total_cotizacion => 'Procesada Parcial'
-    # si son iguales => 'Procesada'
-    if cantidad_seleccionada == cantidad_total_cotizacion:
-        cotizacion_compra.estado = 'Procesada'
-    else:
+    db.session.commit()
+
+    # Verifica si todas las líneas de esta cotización están 'Comprado' o 'Descartado'
+    estados_lineas = [p.estado for p in cotizacion_compra.productos_cotizados]
+    if all(e in ['Comprado', 'Descartado'] for e in estados_lineas):
+        cotizacion_compra.estado = 'Cerrada'
+    elif any(e == 'Comprado' for e in estados_lineas):
         cotizacion_compra.estado = 'Procesada Parcial'
+    else:
+        cotizacion_compra.estado = 'Abierto'
 
     db.session.commit()
 

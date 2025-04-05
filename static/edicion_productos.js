@@ -7,7 +7,7 @@ $(document).ready(function() {
     // Funciones
     function cargarProductos(pagina, terminoBusqueda = '') {
         $.ajax({
-            url: '/productos',
+            url: '/productos?page=' + pagina + '&per_page=20&termino=' + terminoBusqueda,
             method: 'GET',
             data: {
                 page: pagina,
@@ -57,25 +57,6 @@ $(document).ready(function() {
             e.preventDefault();
             let nuevaPagina = parseInt($(this).text());
             cargarProductos(nuevaPagina, $('#buscar-producto').val().trim().toLowerCase());
-        });
-    }
-
-    function filtrarProductos(terminoBusqueda) {
-        $.ajax({
-            url: '/productos',
-            method: 'GET',
-            success: function(response) {
-                let productosActivos = response.filter(producto => producto.activo === true);
-                let productosFiltrados = productosActivos.filter(function(producto) {
-                    return producto.nombre.toLowerCase().includes(terminoBusqueda) ||
-                           producto.codigo_item.toLowerCase().includes(terminoBusqueda);
-                });
-                mostrarProductos(productosFiltrados);
-            },
-            error: function(jqXHR, textStatus, errorThrown) {
-                console.error('Error al cargar los productos:', textStatus, errorThrown);
-                alert('Hubo un error al cargar los productos. Por favor, intenta nuevamente.');
-            }
         });
     }
 
@@ -408,7 +389,7 @@ function mostrarProductos(productos) {
 
 function filtrarProductos(terminoBusqueda) {
         $.ajax({
-            url: '/productos',
+            url: '/productos?page=' + pagina + '&per_page=20&termino=' + terminoBusqueda,
             method: 'GET',
             success: function(response) {
                 let productosActivos = response.filter(producto => producto.activo === true);

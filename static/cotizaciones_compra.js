@@ -76,8 +76,8 @@ function renderCotizacionItems(){
         <tr id="fila-${index}">
             <td>${item.nombre_producto}</td>
             <td>
-                <input type="number" step="0.01" class="form-control" value="${item.precio_ofrecido}" 
-                       onchange="cambiarPrecio(${index}, this.value)">
+                <input type="number" step="0.01" class="form-control" min="0.01"
+                     value="${item.precio_ofrecido}" onchange="cambiarPrecio(${index}, this.value)">
             </td>
             <td>
                 <input type="number" class="form-control" value="${item.cantidad}"
@@ -134,13 +134,19 @@ function guardarCotizacionCompra(){
     }
 
     // Llenar items
-    itemsCotizacion.forEach(item => {
+    for (let item of itemsCotizacion) {
+        if (!item.precio_ofrecido || item.precio_ofrecido <= 0) {
+            alert(`El producto "${item.nombre_producto}" tiene un precio ofrecido inválido. Por favor ingrésalo correctamente.`);
+            return;
+        }
+
         dataCot.items.push({
             item_deseo_id: item.item_deseo_id,
             precio_ofrecido: item.precio_ofrecido,
             cantidad: item.cantidad
         });
-    });
+    }
+
 
 
     // POST al backend
