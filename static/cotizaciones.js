@@ -1,40 +1,110 @@
 document.addEventListener("DOMContentLoaded", function () {
-    console.log("Cotizaciones.js cargado correctamente.");
+    console.log("cotizaciones.js cargado correctamente");
 });
 
-$(document).ready(function () {
-    // Cuando el usuario escribe en el campo de búsqueda
-    $('#buscar-producto').on('input', function() {
-        let termino = $(this).val();
-        buscarProductos(termino);
-    });
-});
+$(document).ready(function() {
+    const tbody = $('#productos-busqueda-lista');
+    const btnVerMas = $('#btn-ver-mas');
+    const mensajeFin = $('#mensaje-fin');
 
-function buscarProductos(termino) {
-    $.ajax({
-        url: `/productos/buscar?termino=${termino}`,
-        method: 'GET',
-        success: function(response) {
-            let tbody = $('#productos-busqueda-lista');
-            tbody.empty();  // Limpiar la lista antes de agregar nuevos resultados
-            response.forEach(function(producto) {
-                let row = `
+    let paginaActual = 1;
+    let totalPaginas = 1;
+    let terminoBusqueda = '';
+    const perPage = 20;
+
+    // Cargar la primera página al inicio
+    buscarProductos(1, terminoBusqueda);
+    function buscarProductos(page, termino) {
+        btnVerMas.prop('disabled', true).text('Cargando...');
+        $.ajax({
+            url: '/productos/buscar',
+            method: 'GET',
+            data: {
+                page: page,
+                per_page: perPage,
+                termino: termino
+            },
+            success: function(response) {
+                // Agregar sin borrar
+                response.productos.forEach(function(producto) {
+                    let row = `
                     <tr>
                         <td>${producto.id}</td>
                         <td>${producto.nombre}</td>
                         <td>${producto.stock}</td>
-                        <td><button class="btn btn-primary" onclick="agregarAOrden(${producto.id})">Agregar</button></td>
+                        <td>
+                            <button class="btn btn-primary" onclick="agregarAOrden(${producto.id})">Agregar</button>
+                        </td>
                     </tr>
-                `;
-                tbody.append(row);
-            });
-        },
-        error: function(xhr, status, error) {
-            console.error('Error al buscar productos:', error);
+                    `;
+                    tbody.append(row);
+                });
+
+                paginaActual = response.pagina_actual;
+                totalPaginas = response.paginas;
+
+                if (paginaActual >= totalPaginas) {
+                    btnVerMas.hide();
+                    mensajeFin.show();
+                } else {
+                    btnVerMas.show().prop('disabled', false).text('Ver más');
+                    mensajeFin.hide();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Error al buscar productos:', error);
+                btnVerMas.prop('disabled', false).text('Ver más');
+            }
+        });
+    }
+    // Al escribir en el input => reiniciar la tabla y cargar la página 1
+    $('#buscar-producto').on('input', function() {
+        terminoBusqueda = $(this).val().trim();
+        paginaActual = 1;
+        totalPaginas = 1;
+        tbody.empty();
+        mensajeFin.hide();
+        btnVerMas.show();
+        buscarProductos(paginaActual, terminoBusqueda);
+    });
+
+    // Botón "Ver más"
+    btnVerMas.on('click', function() {
+        if (paginaActual < totalPaginas) {
+            buscarProductos(paginaActual + 1, terminoBusqueda);
         }
     });
-}
 
+    $(document).on('click', '#generar-cotizacion', function () {
+        const productos = $('#orden-venta-lista tr');
+    
+        if (productos.length === 0) {
+            alert('Debe agregar al menos un producto antes de generar la cotización.');
+            return;
+        }
+    
+        // Si hay productos, mostrar el modal
+        $('#modalCotizacion').modal('show');
+    }); 
+    $('#tipo-moneda-general').on('change', function () {
+        let tipo = $(this).val();
+    
+        if (tipo === 'Soles') {
+            $('#monto-cambio').val('1.00').prop('readonly', true);
+        } else {
+            $('#monto-cambio').prop('readonly', false);
+        }
+    
+        actualizarPreciosSinIGV();
+    });
+    
+    if ($('#tipo-moneda-general').val() === 'Soles') {
+        $('#monto-cambio').val('1.00').prop('readonly', true);
+    }
+    $('#monto-cambio').on('input', function () {
+        actualizarPreciosSinIGV();
+    });
+});
 
 function agregarAOrden(id) {
     // Verificar si el producto ya está en la lista
@@ -47,15 +117,18 @@ function agregarAOrden(id) {
         url: `/productos/${id}`,
         method: 'GET',
         success: function(producto) {
+            let precioSinIGV = (producto.precio / 1.18).toFixed(2);
             let row = `
-                <tr id="producto-${producto.id}">
+                <tr id="producto-${producto.id}" data-precio-original-sin-igv="${precioSinIGV}">
                     <td>${producto.id}</td>
                     <td>${producto.nombre}</td>
                     <td>${producto.stock}</td>
                     <td><input type="number" class="form-control" id="stock-necesario-${producto.id}" value="1" min="1" onchange="calcularPrecioTotal(${producto.id})"></td>
                     <td id="precio-${producto.id}">${producto.precio}</td>
+                    <td id="precio-sin-igv-${producto.id}">${precioSinIGV}</td>
                     <td><input type="number" class="form-control" id="ganancia-${producto.id}" value="0" min="0" onchange="calcularPrecioTotal(${producto.id})"></td>
                     <td id="precio-total-${producto.id}" class="precio-total">${producto.precio}</td>
+                    <td id="precio-total-sin-igv-${producto.id}" class="precio-total-sin-igv">${precioSinIGV}</td>
                     <td>
                         <select class="form-control" id="tipo-compra-${producto.id}">
                             <option value="stock">Stock</option>
@@ -83,18 +156,21 @@ function calcularPrecioTotal(id) {
     let cantidad = parseInt($(`#stock-necesario-${id}`).val());
     let porcentajeGanancia = parseFloat($(`#ganancia-${id}`).val()) || 0;
 
-    let precioTotal = (precio + (precio * (porcentajeGanancia / 100))) * cantidad;
+    let precioUnitarioFinal = precio + (precio * (porcentajeGanancia / 100));
+    let precioTotal = precioUnitarioFinal * cantidad;
+    let precioTotalSinIGV = precioTotal / 1.18;
+    let precioUnitarioSinIGV = precioUnitarioFinal / 1.18;
+
     $(`#precio-total-${id}`).text(precioTotal.toFixed(2));
+    $(`#precio-total-sin-igv-${id}`).text(precioTotalSinIGV.toFixed(2));
+    $(`#precio-sin-igv-${id}`).text(precioUnitarioSinIGV.toFixed(2));
 
     let stockDisponible = parseInt($(`#producto-${id} td:nth-child(3)`).text());
 
-    // Si la cantidad necesaria es menor o igual al stock disponible
     let tipoCompra = $(`#tipo-compra-${id}`);
     if (cantidad <= stockDisponible) {
-        // Solo mostrar "Stock" como opción y deshabilitar el select
         tipoCompra.html('<option value="stock">Stock</option>').prop('disabled', true);
     } else {
-        // Mostrar solo "Compra Local" y "Pedido", eliminando "Stock"
         tipoCompra.html(`
             <option value="local">Compra Local</option>
             <option value="pedido">Pedido</option>
@@ -102,17 +178,31 @@ function calcularPrecioTotal(id) {
     }
 
     actualizarTotal();
+    actualizarPreciosSinIGV();
+
 }
 
 function actualizarTotal() {
     let total = 0;
+    let totalSinIGV = 0;
+    let totalSinIGVConvertido = 0;
+    const tipoCambio = parseFloat($('#monto-cambio').val()) || 1;
+
     $('.precio-total').each(function() {
         total += parseFloat($(this).text());
     });
+
+    $('.precio-total-sin-igv').each(function() {
+        const valor = parseFloat($(this).text()) || 0;
+        totalSinIGV += valor;
+    });
+
     $('#total-precio').text(total.toFixed(2));
+    $('#total-sin-igv').text(totalSinIGV.toFixed(2));
+    $('#total-sin-igv-convertido').text(totalSinIGVConvertido.toFixed(2));
 }
 
-function guardarCotizacion() {
+function guardarCotizacion() {  
     let cotizacion = {
         cliente: $('#cliente').val(),
         solicitante: $('#solicitante').val(),
@@ -120,12 +210,13 @@ function guardarCotizacion() {
         referencia: $('#referencia').val(),
         ruc: $('#ruc').val(),
         celular: $('#celular').val(),
-        fecha: new Date().toLocaleDateString(), // Fecha actual
+        fecha: new Date().toLocaleDateString(),
         productos: obtenerProductosDeCotizacion(),
         total: $('#total-precio').text(),
         plazo_entrega: $('#plazo_entrega').val(),
         pago_credito: $('#pago_credito').val(),
-        tipo_cambio: $('#tipo_cambio').val(),
+        tipo_cambio: $('#tipo-moneda-general').val(),
+        valor_cambio: parseFloat($('#monto-cambio').val()),
         lugar_entrega: $('#lugar_entrega').val(),
         detalle_adicional: $('#detalle_adicional').val()
     };
@@ -137,7 +228,8 @@ function guardarCotizacion() {
         data: JSON.stringify(cotizacion),
         success: function(response) {
             alert(response.mensaje);
-            $('#modalCotizacion').modal('hide'); // Cierra el modal
+            $('#modalCotizacion').modal('hide');
+            location.reload();
         },
         error: function(xhr, status, error) {
             console.error('Error al guardar la cotización:', error);
@@ -154,7 +246,7 @@ function obtenerProductosDeCotizacion() {
             cantidad: $(this).find('input').eq(0).val(),
             precio_unitario: $(this).find('td').eq(4).text(),
             ganancia: $(this).find('input').eq(1).val(),
-            precio_total: $(this).find('td').eq(6).text(),
+            precio_total: $(this).find('td').eq(7).text(),
             tipo_compra: $(this).find('select').val()
         };
         productos.push(producto);
@@ -210,3 +302,26 @@ function crearPreProducto() {
     });
 }
 
+function actualizarPreciosSinIGV() {
+    const tipoCambio = parseFloat($('#monto-cambio').val()) || 1;
+    const tipoMoneda = $('#tipo-moneda-general').val();
+    let totalSinIGVConvertido = 0;
+
+    $('#orden-venta-lista tr').each(function () {
+        const fila = $(this);
+        const cantidad = parseInt(fila.find('input').eq(0).val()) || 1;
+        const precioTotalSinIGVTexto = fila.find('.precio-total-sin-igv').text();
+        const precioTotalSinIGV = parseFloat(precioTotalSinIGVTexto) || 0;
+
+        let convertido;
+        if (tipoMoneda === "Soles") {
+            convertido = precioTotalSinIGV;
+        } else {
+            convertido = precioTotalSinIGV / tipoCambio;
+        }
+
+        totalSinIGVConvertido += convertido;
+    });
+
+    $('#total-sin-igv-convertido').text(totalSinIGVConvertido.toFixed(2));
+}

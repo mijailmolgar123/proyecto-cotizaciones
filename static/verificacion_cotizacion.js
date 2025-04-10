@@ -1,16 +1,23 @@
 $(document).ready(function() {
-    cargarCotizaciones();
+    const tbody = $('#cotizaciones-lista');
+    const btnVerMas = $('#btn-ver-mas');
+    const mensajeFin = $('#mensaje-fin');
 
-    function cargarCotizaciones() {
+    let paginaActual = 1;
+    let totalPaginas = 1;
+    const porPagina = 20;
+
+    function cargarCotizaciones(page) {
         $.ajax({
-            url: '/cotizaciones',  
+            url: '/cotizaciones',
             method: 'GET',
-            success: function(cotizaciones) {
-                let tbody = $('#cotizaciones-lista');
-                tbody.empty();  
-
-                cotizaciones.forEach(function(cotizacion) {
-                    let estadoClass = 'secondary'; // Estado por defecto
+            data: {
+                page: page,
+                per_page: porPagina
+            },
+            success: function (response) {
+                response.cotizaciones.forEach(function (cotizacion) {
+                    let estadoClass = 'secondary';
                     if (cotizacion.estado === 'Pendiente') estadoClass = 'warning';
                     else if (cotizacion.estado === 'Finalizado Total') estadoClass = 'success';
                     else if (cotizacion.estado === 'Finalizado Parcial') estadoClass = 'info';
@@ -22,7 +29,7 @@ $(document).ready(function() {
                             <td>${cotizacion.ruc}</td>
                             <td>${cotizacion.fecha}</td>
                             <td><span class="badge badge-${estadoClass}">${cotizacion.estado}</span></td>
-                            <td>${cotizacion.creado_por}</td> 
+                            <td>${cotizacion.creado_por}</td>
                             <td>
                                 <button class="btn btn-primary" onclick="verDetalleCotizacion(${cotizacion.id})">
                                     Transformar a Orden de Venta
@@ -32,13 +39,34 @@ $(document).ready(function() {
                     `;
                     tbody.append(row);
                 });
+
+                paginaActual = response.pagina_actual;
+                totalPaginas = response.paginas;
+
+                if (paginaActual >= totalPaginas) {
+                    btnVerMas.hide();
+                    mensajeFin.show();
+                } else {
+                    btnVerMas.show();
+                    mensajeFin.hide();
+                }
             },
-            error: function(xhr, status, error) {
+            error: function (xhr, status, error) {
                 console.error('Error al cargar cotizaciones:', error);
-                alert('Hubo un problema al cargar las cotizaciones. Intenta de nuevo.');
+                alert('Hubo un problema al cargar las cotizaciones.');
             }
         });
     }
+
+    // Cargar la primera página al inicio
+    cargarCotizaciones(paginaActual);
+
+    // Botón "Ver más"
+    btnVerMas.click(function () {
+        if (paginaActual < totalPaginas) {
+            cargarCotizaciones(paginaActual + 1);
+        }
+    });
 
     window.verDetalleCotizacion = function(id) {
         $.ajax({
@@ -108,7 +136,7 @@ $(document).ready(function() {
                 success: function(response) {
                     alert('Orden de venta generada exitosamente.');
                     $('#detalleCotizacionModal').modal('hide');
-                    cargarCotizaciones();
+                    reiniciarYRecargarCotizaciones();
                 },
                 error: function(xhr, status, error) {
                     console.error('Error al obtener los detalles de la orden de venta:', xhr.responseText);
@@ -132,11 +160,21 @@ $(document).ready(function() {
             success: function(response) {
                 alert('Cotización rechazada correctamente.');
                 $('#detalleCotizacionModal').modal('hide');
-                cargarCotizaciones();
+                reiniciarYRecargarCotizaciones();
             },
             error: function(error) {
                 alert('Hubo un problema al rechazar la cotización.');
             }
         });
     });
+
+    function reiniciarYRecargarCotizaciones() {
+        paginaActual = 1;
+        totalPaginas = 1;
+        $('#cotizaciones-lista').empty();
+        $('#mensaje-fin').hide();
+        $('#btn-ver-mas').show();
+        cargarCotizaciones(paginaActual);
+    }
+    
 });

@@ -138,3 +138,8 @@ body {
 .back-button {
     display: none;
 }
+
+#productos-lista {
+    min-height: 800px; 
+ }
+ 

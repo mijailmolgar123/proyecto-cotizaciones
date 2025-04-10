@@ -3,14 +3,21 @@ $(document).ready(function () {
     // Cargar todas las órdenes de venta
     cargarOrdenesVenta();
 
-    function cargarOrdenesVenta() {
-        $.ajax({
-            url: '/ordenes_venta',
-            method: 'GET',
-            success: function (ordenes) {
-                let tbody = $('#ordenes-lista');
-                tbody.empty();  // Limpiar la tabla antes de agregar filas nuevas
+    let paginaActual = 1;
+    let totalPaginas = 1;
 
+    function cargarOrdenesVenta(pagina = 1) {
+        $.ajax({
+            url: `/ordenes_venta?page=${pagina}&per_page=20`,
+            method: 'GET',
+            success: function (response) {
+                const ordenes = response.ordenes;
+                paginaActual = response.pagina_actual;
+                totalPaginas = response.total_paginas;
+    
+                let tbody = $('#ordenes-lista');
+                if (pagina === 1) tbody.empty(); // Solo vaciar si es la primera página
+    
                 ordenes.forEach(function (orden) {
                     let row = `
                         <tr>
@@ -18,13 +25,25 @@ $(document).ready(function () {
                             <td>${orden.solicitante}</td>
                             <td>${orden.fecha_orden_compra || 'No definida'}</td>
                             <td><span class="badge badge-${orden.estado === 'Pendiente' ? 'warning' : 'success'}">${orden.estado}</span></td>
-                            <td>${orden.estado_tiempo}</td>  <!-- Nuevo campo para estado de tiempo -->
+                            <td>${orden.estado_tiempo}</td>
+                            <td>${orden.total}</td>
+                            <td>${orden.tipo_cambio}</td>
+                            <td>${orden.total_convertido || '-'}</td>
+                            <td>${orden.plazo_entrega}</td>
+                            <td>${orden.pago_credito}</td>
                             <td>${orden.creado_por}</td>
                             <td><button class="btn btn-primary" onclick="verDetalleOrden(${orden.id})">Ver Detalle</button></td>
                         </tr>
                     `;
                     tbody.append(row);
                 });
+    
+                // Mostrar u ocultar el botón "Ver más"
+                if (paginaActual >= totalPaginas) {
+                    $('#btn-ver-mas-ordenes').hide();
+                } else {
+                    $('#btn-ver-mas-ordenes').show();
+                }
             },
             error: function (xhr, status, error) {
                 console.error('Error al cargar órdenes de Venta:', error);
@@ -32,6 +51,7 @@ $(document).ready(function () {
             }
         });
     }
+    
 
     // Limpiar los detalles de la orden seleccionada
     function limpiarDetalleOrden() {
@@ -107,8 +127,6 @@ $(document).ready(function () {
         });
     }
 
-
-
     // Actualizar la tabla con las cantidades remitidas
     function actualizarCantidadesRemisionadas(productosRemisionados) {
         console.log("Productos remitidos recibidos:", productosRemisionados);
@@ -138,7 +156,6 @@ $(document).ready(function () {
             }
         });
     }
-
 
     // Obtener las guías de remisión asociadas a la orden
     function obtenerGuiasRemision(ordenId) {
@@ -314,27 +331,8 @@ $(document).ready(function () {
             $('body').css('padding-right', ''); 
         }
     });
+    $('#total-sin-igv-convertido').text(totalSinIGVConvertido.toFixed(2));
 
-    // Función para mostrar los productos de la guía en el modal
-    function mostrarProductosGuia(productos) {
-        let tbody = $('#productos-guia-lista');
-        tbody.empty(); // Limpiar antes de agregar nuevos datos
-
-        productos.forEach(function (producto) {
-            let row = `
-                <tr>
-                    <td>${producto.nombre}</td>
-                    <td>${producto.cantidad}</td>
-                    <td>${producto.estado}</td>
-                </tr>
-            `;
-            tbody.append(row);
-        });
-
-        if (productos.length === 0) {
-            tbody.append('<tr><td colspan="3" class="text-center">No hay productos en esta guía.</td></tr>');
-        }
-    }
 });
 
 $('#guardarCambiosGuia').click(function() {
@@ -401,7 +399,12 @@ window.cargarOrdenesVenta = function () {
                         <td>${orden.solicitante}</td>
                         <td>${orden.fecha_orden_compra || 'No definida'}</td>
                         <td><span class="badge badge-${orden.estado === 'Pendiente' ? 'warning' : 'success'}">${orden.estado}</span></td>
-                        <td>${orden.estado_tiempo}</td>  
+                        <td>${orden.estado_tiempo}</td>
+                        <td>${orden.total}</td>
+                        <td>${orden.tipo_cambio}</td>
+                        <td>${orden.total_convertido || '-'}</td>
+                        <td>${orden.plazo_entrega}</td>
+                        <td>${orden.pago_credito}</td>
                         <td>${orden.creado_por}</td>
                         <td><button class="btn btn-primary" onclick="verDetalleOrden(${orden.id})">Ver Detalle</button></td>
                     </tr>
@@ -415,3 +418,9 @@ window.cargarOrdenesVenta = function () {
         }
     });
 };
+
+$('#btn-ver-mas-ordenes').on('click', function () {
+    if (paginaActual < totalPaginas) {
+        cargarOrdenesVenta(paginaActual + 1);
+    }
+});

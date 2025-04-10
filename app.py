@@ -1,13 +1,12 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
 from flask_migrate import Migrate
 from sqlalchemy.orm import Session
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
 import os
 from flask import request, jsonify
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, render_template, redirect, url_for
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
@@ -16,6 +15,8 @@ import json
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy import text
+from math import ceil
+from sqlalchemy.orm import joinedload
 
 app = Flask(__name__)
 
@@ -157,6 +158,7 @@ class Cotizacion(db.Model):
     tipo_cambio = db.Column(db.String(10), nullable=False)  # Moneda: soles, dólares o euros
     lugar_entrega = db.Column(db.String(255))  # Campo opcional para el lugar de entrega
     detalle_adicional = db.Column(db.Text)  # Campo opcional para detalles adicionales
+    valor_cambio = db.Column(db.Float, nullable=False, default=1.0)
 
 class ProductoCotizacion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -189,6 +191,8 @@ class OrdenVenta(db.Model):
      # **Nuevos campos**
     numero_orden_compra = db.Column(db.String(50), nullable=False)  # Número de OC del cliente
     fecha_orden_compra = db.Column(db.String(10), nullable=False)   # Fecha de OC
+    cotizacion = db.relationship('Cotizacion', backref='ordenes_venta', lazy=True)
+    creador = db.relationship('Usuario', backref='ordenes_creadas', lazy=True)
 
 class ProductoOrden(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -475,8 +479,6 @@ def crear_producto():
         'id': nuevo_producto.id
     }), 201
 
-from sqlalchemy import func
-
 @app.route('/productos', methods=['GET'])
 def obtener_productos():
     """
@@ -493,9 +495,17 @@ def obtener_productos():
 
     # Si hay término, aplicar FTS:
     if termino:
-        query = query.filter(
-            Producto.search_vector.op('@@')(func.plainto_tsquery('spanish', termino))
-        )
+        # Construye un string para to_tsquery con :*
+        # Ej: termino = "cas aca" => "cas:* & aca:*"
+        tokens = termino.split()
+        if tokens:
+            tsquery_string = ' & '.join([f"{t.strip()}:*" for t in tokens])
+            # Aplica FTS con prefijos
+            query = query.filter(
+                Producto.search_vector.op('@@')(
+                    func.to_tsquery('spanish', tsquery_string)
+                )
+            )
 
     # Paginamos la query
     productos_paginados = query.order_by(Producto.id.asc()).paginate(
@@ -588,38 +598,88 @@ def desactivar_producto(id):
 
 @app.route('/productos/buscar', methods=['GET'])
 def buscar_productos():
+    """
+    Endpoint con paginación + Full-Text Search (columna 'search_vector').
+    Admite coincidencia parcial usando :* (prefijos).
+    Parámetros:
+      - page (int)
+      - per_page (int)
+      - termino (str)
+    Devuelve:
+      {
+        "productos": [...],
+        "total": int,
+        "paginas": int,
+        "pagina_actual": int
+      }
+    """
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    termino = request.args.get('termino', '', type=str).strip()
 
-    termino = request.args.get('termino', '').strip()
+    offset = (page - 1) * per_page
 
-    # 1) Si no hay término => mostrar primeros 20
     if not termino:
-        sql = text("""
+        # CASO 1: sin término => traer productos activos sin filtro, paginados
+        sql_count = text("""
+            SELECT COUNT(*) AS total
+            FROM producto
+            WHERE activo = TRUE
+        """)
+        total_rows = db.session.execute(sql_count).scalar()
+
+        sql_data = text("""
             SELECT *
             FROM producto
             WHERE activo = TRUE
-            ORDER BY id ASC
-            LIMIT 20
-        """)
-        result = db.session.execute(sql)
-        rows = result.mappings().all()  # row-by-row, como diccionario
-    else:
-        # 2) Si SÍ hay término => Full-Text Search con search_vector
-        sql = text("""
-            SELECT * FROM producto
-            WHERE activo = TRUE
-            AND to_tsvector('spanish', nombre || ' ' || descripcion)
-                @@ plainto_tsquery('spanish', :termino)
             ORDER BY id
             LIMIT :limit
             OFFSET :offset
         """)
-        result = db.session.execute(sql, {'termino': termino})
-        rows = result.mappings().all()
+        rows = db.session.execute(sql_data, {
+            'limit': per_page,
+            'offset': offset
+        }).mappings().all()
 
-    # Mapeamos cada fila a JSON
-    productos_json = []
+    else:
+        # CASO 2: con término => construimos un to_tsquery con :*
+        # p.ej. "cas aca" => "cas:* & aca:*"
+        tokens = termino.split()
+        if tokens:
+            tsquery_string = ' & '.join([f"{t.strip()}:*" for t in tokens])
+        else:
+            # si hubiera un caso raro de término vacío
+            tsquery_string = ''  # no coincidirá nada
+
+        # Contar total
+        sql_count = text("""
+            SELECT COUNT(*) AS total
+            FROM producto
+            WHERE activo = TRUE
+              AND search_vector @@ to_tsquery('spanish', :tsquery)
+        """)
+        total_rows = db.session.execute(sql_count, {'tsquery': tsquery_string}).scalar()
+
+        # Obtener datos
+        sql_data = text("""
+            SELECT *
+            FROM producto
+            WHERE activo = TRUE
+              AND search_vector @@ to_tsquery('spanish', :tsquery)
+            ORDER BY id
+            LIMIT :limit
+            OFFSET :offset
+        """)
+        rows = db.session.execute(sql_data, {
+            'tsquery': tsquery_string,
+            'limit': per_page,
+            'offset': offset
+        }).mappings().all()
+
+    # Mapeo a JSON
+    productos = []
     for row in rows:
-        productos_json.append({
+        productos.append({
             'id': row['id'],
             'nombre': row['nombre'],
             'descripcion': row['descripcion'],
@@ -634,7 +694,15 @@ def buscar_productos():
             'activo': row['activo']
         })
 
-    return jsonify(productos_json)
+    # Calcular total de páginas
+    paginas = ceil(total_rows / per_page) if per_page else 1
+
+    return jsonify({
+        'productos': productos,
+        'total': total_rows,
+        'paginas': paginas,
+        'pagina_actual': page
+    })
 
 @app.route('/guardar_cotizacion', methods=['POST'])
 def guardar_cotizacion():
@@ -652,6 +720,7 @@ def guardar_cotizacion():
         plazo_entrega=int(datos['plazo_entrega']),  # Convertir a entero
         pago_credito=datos['pago_credito'],
         tipo_cambio=datos['tipo_cambio'],
+        valor_cambio=datos.get('valor_cambio', 1.0),
         lugar_entrega=datos.get('lugar_entrega', ''),  # Opcional
         detalle_adicional=datos.get('detalle_adicional', ''),  # Opcional
         creado_por=current_user.id  # Añadir quién creó la cotización
@@ -718,21 +787,46 @@ def obtener_cotizacion(id):
     return jsonify(cotizacion_data)
 
 @app.route('/cotizaciones', methods=['GET'])
-def obtener_todas_las_cotizaciones():
-    cotizaciones = Cotizacion.query.all()
-    cotizaciones_data = [
-        {
-            'id': cotizacion.id,
-            'cliente': cotizacion.cliente,
-            'ruc': cotizacion.ruc,
-            'fecha': cotizacion.fecha,
-            'email': cotizacion.email,
-            'estado': cotizacion.estado,
-            'creado_por': db.session.get(Usuario, cotizacion.creado_por).nombre_usuario if db.session.get(Usuario, cotizacion.creado_por) else 'Desconocido'
-        }
-        for cotizacion in cotizaciones
-    ]
-    return jsonify(cotizaciones_data)
+def obtener_cotizaciones_paginadas():
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    offset = (page - 1) * per_page
+
+    # Total de cotizaciones activas
+    total_query = text("SELECT COUNT(*) FROM cotizacion")
+    total_rows = db.session.execute(total_query).scalar()
+
+    # Cotizaciones ordenadas por ID DESC (más reciente primero)
+    sql = text("""
+        SELECT * FROM cotizacion
+        ORDER BY id DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    rows = db.session.execute(sql, {
+        'limit': per_page,
+        'offset': offset
+    }).mappings().all()
+
+    # Formatear resultado
+    cotizaciones_data = []
+    for row in rows:
+        usuario = db.session.get(Usuario, row['creado_por'])
+        cotizaciones_data.append({
+            'id': row['id'],
+            'cliente': row['cliente'],
+            'ruc': row['ruc'],
+            'fecha': row['fecha'],
+            'email': row['email'],
+            'estado': row['estado'],
+            'creado_por': usuario.nombre_usuario if usuario else 'Desconocido'
+        })
+
+    return jsonify({
+        'cotizaciones': cotizaciones_data,
+        'pagina_actual': page,
+        'total': total_rows,
+        'paginas': ceil(total_rows / per_page) if per_page else 1
+    })
 
 @app.route('/transformar_orden_venta/<int:cotizacion_id>', methods=['POST'])
 @login_required
@@ -829,50 +923,77 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route('/ordenes_venta', methods=['GET'])
+@login_required
 def obtener_ordenes_venta():
-    ordenes = OrdenVenta.query.all()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
+    ordenes_paginadas = OrdenVenta.query.options(
+        joinedload(OrdenVenta.cotizacion),
+        joinedload(OrdenVenta.productos),
+        joinedload(OrdenVenta.guias_remision),
+        joinedload(OrdenVenta.creador)
+    ).order_by(OrdenVenta.id.desc()).paginate(page=page, per_page=per_page, error_out=False)
+
+    hoy = datetime.today().date()
     output = []
 
-    hoy = datetime.today().date()  # Obtener la fecha actual
+    for orden in ordenes_paginadas.items:
+        cotizacion = orden.cotizacion
+        creador = orden.creador
 
-    for orden in ordenes:
-        creador = db.session.get(Usuario, orden.creado_por)
+        tipo_cambio = cotizacion.tipo_cambio if cotizacion else "Soles"
+        plazo_entrega = cotizacion.plazo_entrega if cotizacion else "No definido"
+        pago_credito = cotizacion.pago_credito if cotizacion else "No definido"
+        total_soles = orden.total
 
-        # Verificar si la fecha existe y convertirla correctamente
-        fecha_orden_compra = None
+        total_convertido = None
+        if tipo_cambio.lower() == "dólares":
+            total_convertido = f"${(total_soles / 3.8):.2f} (USD)"
+        elif tipo_cambio.lower() == "euros":
+            total_convertido = f"€{(total_soles / 4.1):.2f} (EUR)"
+
+        estado_tiempo = "Fecha no definida"
         if orden.fecha_orden_compra:
             try:
-                # Intentar convertir desde el formato que devuelve la base de datos (YYYY-MM-DD)
-                fecha_orden_compra = datetime.strptime(orden.fecha_orden_compra, "%Y-%m-%d").date()
-            except ValueError:
-                print(f"Error al convertir la fecha: {orden.fecha_orden_compra}")
-
-        # Determinar si la orden está a tiempo, en límite o a destiempo
-        if fecha_orden_compra:
-            if fecha_orden_compra > hoy:
-                estado_tiempo = "A tiempo"
-            elif fecha_orden_compra == hoy:
-                estado_tiempo = "Tiempo límite"
-            else:
-                estado_tiempo = "A destiempo"
-        else:
-            estado_tiempo = "Fecha no definida"
+                fecha_orden = datetime.strptime(orden.fecha_orden_compra, "%Y-%m-%d").date()
+                if cotizacion and isinstance(cotizacion.plazo_entrega, int):
+                    fecha_limite = fecha_orden + timedelta(days=cotizacion.plazo_entrega)
+                    if fecha_limite > hoy:
+                        estado_tiempo = "A tiempo"
+                    elif fecha_limite == hoy:
+                        estado_tiempo = "Tiempo límite"
+                    else:
+                        estado_tiempo = "A destiempo"
+            except Exception as e:
+                estado_tiempo = "Error en fecha"
 
         orden_data = {
             'id': orden.id,
             'cliente': orden.cliente,
             'solicitante': orden.solicitante,
             'fecha': orden.fecha,
-            'fecha_orden_compra': orden.fecha_orden_compra if orden.fecha_orden_compra else "No definida",
-            'estado_tiempo': estado_tiempo,  # Estado de tiempo
+            'fecha_orden_compra': orden.fecha_orden_compra or "No definida",
+            'estado_tiempo': estado_tiempo,
             'estado': orden.estado,
-            'creado_por': creador.nombre_usuario if creador else 'Desconocido',
-            'productos': [producto.producto_id for producto in orden.productos],
-            'tiene_guias_remision': len(orden.guias_remision) > 0
+            'creado_por': creador.nombre_usuario if creador else "Desconocido",
+            'productos': [p.producto_id for p in orden.productos],
+            'tiene_guias_remision': bool(orden.guias_remision),
+            'total': f"S/. {total_soles:.2f}",
+            'tipo_cambio': tipo_cambio,
+            'total_convertido': total_convertido,
+            'plazo_entrega': plazo_entrega,
+            'pago_credito': pago_credito
         }
+
         output.append(orden_data)
 
-    return jsonify(output)
+    return jsonify({
+        'ordenes': output,
+        'pagina_actual': ordenes_paginadas.page,
+        'total_paginas': ordenes_paginadas.pages,
+        'total_registros': ordenes_paginadas.total
+    })
 
 @app.route('/orden_venta/<int:orden_id>', methods=['GET'])
 def obtener_orden(orden_id):

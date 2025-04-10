@@ -1,74 +1,73 @@
-$(document).ready(function() {
-    // Definición de columnas visibles
+$(document).ready(function () {
     const columnasVisibles = ['id', 'nombre', 'precio', 'stock', 'proveedor', 'codigo_item', 'unidad'];
     let paginaActual = 1;
     const productosPorPagina = 20;
+    let terminoBusqueda = '';
+    let totalPaginas = 1;
+    const tbody = $('#productos-lista');
 
-    // Funciones
-    function cargarProductos(pagina, terminoBusqueda = '') {
+    // Cargar página
+    function cargarPagina(page) {
+        $('#btn-ver-mas').prop('disabled', true).text('Cargando...');
         $.ajax({
-            url: '/productos?page=' + pagina + '&per_page=20&termino=' + terminoBusqueda,
+            url: '/productos',
             method: 'GET',
             data: {
-                page: pagina,
+                page: page,
                 per_page: productosPorPagina,
                 termino: terminoBusqueda
             },
-            success: function(response) {
-                mostrarProductos(response.productos);
-                actualizarPaginacion(response.paginas, response.pagina_actual);
+            success: function (response) {
+                response.productos.forEach(producto => {
+                    let row = '<tr>';
+                    columnasVisibles.forEach(columna => {
+                        row += `<td>${producto[columna]}</td>`;
+                    });
+                    row += `
+                        <td>
+                            <button class="btn btn-warning" onclick="mostrarFormularioEditar(${producto.id})">Editar</button>
+                            <button class="btn btn-danger" onclick="eliminarProducto(${producto.id})">Eliminar</button>
+                        </td>
+                    </tr>`;
+                    tbody.append(row);
+                });
+
+                paginaActual = response.pagina_actual;
+                totalPaginas = response.paginas;
+
+                if (paginaActual >= totalPaginas) {
+                    $('#btn-ver-mas').hide();
+                    $('#mensaje-fin').show();
+                } else {
+                    $('#btn-ver-mas').show().prop('disabled', false).text('Ver más');
+                    $('#mensaje-fin').hide();
+                }
             },
-            error: function(jqXHR, textStatus, errorThrown) {
-                console.error('Error al cargar los productos:', textStatus, errorThrown);
-                alert('Hubo un error al cargar los productos. Por favor, intenta nuevamente.');
+            error: function () {
+                alert('Error al cargar productos');
+                $('#btn-ver-mas').prop('disabled', false).text('Ver más');
             }
         });
     }
 
-    function mostrarProductos(productos) {
-        let tbody = $('#productos-lista');
-        tbody.empty();
-
-        productos.forEach(function(producto) {
-            let row = '<tr>';
-            columnasVisibles.forEach(function(columna) {
-                row += `<td>${producto[columna]}</td>`;
-            });
-            row += `
-                <td>
-                    <button class="btn btn-warning" onclick="mostrarFormularioEditar(${producto.id})">Editar</button>
-                    <button class="btn btn-danger" onclick="eliminarProducto(${producto.id})">Eliminar</button>
-                </td>
-            </tr>`;
-            tbody.append(row);
-        });
-    }
-
-    function actualizarPaginacion(totalPaginas, paginaActual) {
-        let paginacion = $('#paginacion');
-        paginacion.empty();
-
-        for (let i = 1; i <= totalPaginas; i++) {
-            let claseActivo = i === paginaActual ? 'active' : '';
-            paginacion.append(`<li class="page-item ${claseActivo}"><a class="page-link" href="#">${i}</a></li>`);
-        }
-
-        $('.page-link').click(function(e) {
-            e.preventDefault();
-            let nuevaPagina = parseInt($(this).text());
-            cargarProductos(nuevaPagina, $('#buscar-producto').val().trim().toLowerCase());
-        });
-    }
-
-    // Manejador de eventos para el input de búsqueda
-    $('#buscar-producto').on('input', function() {
-        const termino = $(this).val().trim().toLowerCase();
-        paginaActual = 1;
-        cargarProductos(paginaActual, termino);
+    // Botón Ver más
+    $('#btn-ver-mas').on('click', function () {
+        cargarPagina(paginaActual + 1);
     });
 
-    // Cargar productos al inicio
-    cargarProductos();
+    // Búsqueda
+    $('#buscar-producto').on('input', function () {
+        terminoBusqueda = $(this).val().trim().toLowerCase();
+        paginaActual = 1;
+        totalPaginas = 1;
+        tbody.empty();
+        $('#mensaje-fin').hide();
+        $('#btn-ver-mas').show();
+        cargarPagina(1);
+    });
+
+    // Carga inicial
+    cargarPagina(1);
 });
 
 function navigateTo(role) {
@@ -183,56 +182,6 @@ function eliminarProducto(id) {
 function cerrarFormularioAgregar() {
     $('#formulario').empty(); // Limpia el formulario y lo oculta
 }
-
-
-function editarProducto(id) {
-    let producto = {
-        nombre: $('#nombre').val(),
-        descripcion: $('#descripcion').val(),
-        precio: $('#precio').val(),
-        stock: $('#stock').val(),
-        proveedor: $('#proveedor').val(),
-        sucursal: $('#sucursal').val(),
-        almacen: $('#almacen').val(),
-        codigo_item: $('#codigo_item').val(),
-        codigo_barra: $('#codigo_barra').val(),
-        unidad: $('#unidad').val()
-    };
-
-    $.ajax({
-        url: `/productos/${id}`,
-        method: 'PUT',
-        contentType: 'application/json',
-        data: JSON.stringify(producto),
-        success: function(response) {
-            alert('Producto actualizado con éxito'); // Notificación opcional
-            cerrarFormularioEdicion(); // Cierra el formulario de edición
-            cargarProductos(); // Recarga la lista de productos
-        },
-        error: function(error) {
-            alert('Error al actualizar el producto');
-            console.error('Error:', error);
-        }
-    });
-}
-
-function eliminarProducto(id) {
-    if (confirm('¿Estás seguro de que deseas eliminar este producto?')) {
-        $.ajax({
-            url: `/productos/${id}`,
-            method: 'DELETE',
-            success: function(response) {
-                alert(response.mensaje);
-                $(`#producto-${id}`).remove();
-            },
-            error: function(jqXHR, textStatus, errorThrown) {
-                console.error('Error al eliminar el producto:', textStatus, errorThrown);
-                alert('Hubo un error al eliminar el producto. Por favor, intenta nuevamente.');
-            }
-        });
-    }
-}
-
 // Definir las columnas que se mostrarán
 const columnasVisibles = ['id', 'nombre', 'precio', 'stock', 'proveedor', 'codigo_item', 'unidad'];
 const productosPorPagina = 20;
@@ -347,77 +296,3 @@ function editarProducto(id) {
         }
     });
 }
-
-function cargarProductos(pagina, terminoBusqueda = '') {
-        $.ajax({
-            url: '/productos',
-            method: 'GET',
-            data: {
-                page: pagina,
-                per_page: productosPorPagina,
-                termino: terminoBusqueda
-            },
-            success: function(response) {
-                mostrarProductos(response.productos);
-                actualizarPaginacion(response.paginas, response.pagina_actual);
-            },
-            error: function(jqXHR, textStatus, errorThrown) {
-                console.error('Error al cargar los productos:', textStatus, errorThrown);
-                alert('Hubo un error al cargar los productos. Por favor, intenta nuevamente.');
-            }
-        });
-}
-
-function mostrarProductos(productos) {
-        let tbody = $('#productos-lista');
-        tbody.empty();
-
-        productos.forEach(function(producto) {
-            let row = '<tr>';
-            columnasVisibles.forEach(function(columna) {
-                row += `<td>${producto[columna]}</td>`;
-            });
-            row += `
-                <td>
-                    <button class="btn btn-warning" onclick="mostrarFormularioEditar(${producto.id})">Editar</button>
-                    <button class="btn btn-danger" onclick="eliminarProducto(${producto.id})">Eliminar</button>
-                </td>
-            </tr>`;
-            tbody.append(row);
-        });
-    }
-
-function filtrarProductos(terminoBusqueda) {
-        $.ajax({
-            url: '/productos?page=' + pagina + '&per_page=20&termino=' + terminoBusqueda,
-            method: 'GET',
-            success: function(response) {
-                let productosActivos = response.filter(producto => producto.activo === true);
-                let productosFiltrados = productosActivos.filter(function(producto) {
-                    return producto.nombre.toLowerCase().includes(terminoBusqueda) ||
-                           producto.codigo_item.toLowerCase().includes(terminoBusqueda);
-                });
-                mostrarProductos(productosFiltrados);
-            },
-            error: function(jqXHR, textStatus, errorThrown) {
-                console.error('Error al cargar los productos:', textStatus, errorThrown);
-                alert('Hubo un error al cargar los productos. Por favor, intenta nuevamente.');
-            }
-        });
-}
-
-function actualizarPaginacion(totalPaginas, paginaActual) {
-        let paginacion = $('#paginacion');
-        paginacion.empty();
-
-        for (let i = 1; i <= totalPaginas; i++) {
-            let claseActivo = i === paginaActual ? 'active' : '';
-            paginacion.append(`<li class="page-item ${claseActivo}"><a class="page-link" href="#">${i}</a></li>`);
-        }
-
-        $('.page-link').click(function(e) {
-            e.preventDefault();
-            let nuevaPagina = parseInt($(this).text());
-            cargarProductos(nuevaPagina, $('#buscar-producto').val().trim().toLowerCase());
-        });
-    }

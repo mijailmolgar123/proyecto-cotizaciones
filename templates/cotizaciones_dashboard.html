@@ -8,7 +8,7 @@
 
         <div class="row">
             <!-- Columna izquierda: Búsqueda de productos -->
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <div class="form-group">
                     <label for="buscar-producto">Buscar Producto:</label>
                     <input type="text" class="form-control" id="buscar-producto" placeholder="Ingrese nombre o código">
@@ -26,21 +26,25 @@
                         <!-- Aquí se agregarán los productos dinámicamente -->
                     </tbody>
                 </table>
+                <button id="btn-ver-mas" class="btn btn-primary mt-2">Ver más</button>
+                <p id="mensaje-fin" style="display: none;">No hay más resultados</p>
             </div>
 
             <!-- Columna derecha: Productos seleccionados para la cotización -->
-            <div class="col-md-6">
-                <h3>Orden de Venta</h3>
+            <div class="col-md-8">
+                <h3>Edicion de Cotizacion</h3>
                 <table class="table table-striped mt-3">
                     <thead>
                         <tr>
                             <th>ID</th>
                             <th>Nombre Producto</th>
                             <th>Stock</th>
-                            <th>Stock Necesario</th>
+                            <th>Cant. Necesaria</th>
                             <th>Precio</th>
+                            <th>Precio sin IGV</th>
                             <th>% Margen</th>
                             <th>Precio Total</th>
+                            <th>Precio Total sin IGV</th>
                             <th>Tipo de Compra</th>
                             <th>Acciones</th>
                         </tr>
@@ -50,15 +54,34 @@
                     </tbody>
                     <tfoot>
                         <tr>
-                            <th colspan="6">Total</th>
+                            <th colspan="7" class="text-right">Totales:</th>
                             <th id="total-precio">0</th>
+                            <th id="total-sin-igv">0</th>
                             <th colspan="2"></th>
                         </tr>
                     </tfoot>
+                    <tr>
+                        <td colspan="11" class="text-right font-weight-bold text-info">
+                            Total sin IGV Convertido: <span id="total-sin-igv-convertido">0</span>
+                        </td>
+                    </tr>
                 </table>
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="tipo-moneda-general">Tipo de Moneda:</label>
+                        <select class="form-control" id="tipo-moneda-general">
+                            <option value="Soles">Soles</option>
+                            <option value="Dólares">Dólares</option>
+                            <option value="Euros">Euros</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="monto-cambio">Valor del Tipo de Cambio:</label>
+                        <input type="number" class="form-control" id="monto-cambio" step="0.01" value="1.00">
+                    </div>
+                </div>                              
                 <!-- Aquí está el botón para generar la cotización -->
-                <button class="btn btn-success" id="generar-cotizacion" data-toggle="modal"
-                    data-target="#modalCotizacion">Generar Cotización</button>
+                <button class="btn btn-success" id="generar-cotizacion">Generar Cotización</button>
 
                 <!-- Modal para completar la cotización -->
                 <div class="modal fade" id="modalCotizacion" tabindex="-1" role="dialog"
@@ -104,14 +127,6 @@
                                     <div class="form-group">
                                         <label for="pago_credito">Plazo de Pago en Crédito:</label>
                                         <input type="text" class="form-control" id="pago_credito" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="tipo_cambio">Tipo de Cambio:</label>
-                                        <select class="form-control" id="tipo_cambio">
-                                            <option value="Soles">Soles</option>
-                                            <option value="Dólares">Dólares</option>
-                                            <option value="Euros">Euros</option>
-                                        </select>
                                     </div>
                                     <div class="form-group">
                                         <label for="lugar_entrega">Lugar de Entrega (Opcional):</label>

@@ -20,6 +20,10 @@
                 <!-- Cotizaciones cargadas dinámicamente -->
             </tbody>
         </table>
+        <div class="text-center mt-3">
+            <button id="btn-ver-mas" class="btn btn-outline-primary">Ver más</button>
+            <div id="mensaje-fin" class="mt-2 text-muted" style="display: none;">No hay más cotizaciones.</div>
+        </div>   
     </div>
 
     <!-- Modal para ver detalles de cotización y aprobar productos -->
@@ -56,7 +60,7 @@
                         <tbody id="productos-cotizacion-lista">
                             <!-- Productos de la cotización -->
                         </tbody>
-                    </table>
+                    </table>                 
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-danger" id="rechazar-cotizacion">Rechazar Cotización</button>
