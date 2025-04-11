@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, send_file, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy.orm import Session
@@ -17,6 +17,9 @@ from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy import text
 from math import ceil
 from sqlalchemy.orm import joinedload
+from flask import Flask, request, jsonify, send_file
+from flask_login import login_required, current_user
+from generate_excel import generate_excel_file
 
 app = Flask(__name__)
 
@@ -705,32 +708,34 @@ def buscar_productos():
     })
 
 @app.route('/guardar_cotizacion', methods=['POST'])
+@login_required
 def guardar_cotizacion():
     datos = request.json
-    # Crear una nueva cotización
+
+    # 1) Crear y guardar la cotización en BD
     nueva_cotizacion = Cotizacion(
         cliente=datos['cliente'],
         solicitante=datos['solicitante'],
         email=datos['email'],
         referencia=datos['referencia'],
         ruc=datos['ruc'],
-        celular=datos.get('celular', ''),  # Campo opcional
+        celular=datos.get('celular', ''),
         fecha=datos['fecha'],
         total=datos['total'],
-        plazo_entrega=int(datos['plazo_entrega']),  # Convertir a entero
+        plazo_entrega=int(datos['plazo_entrega']),
         pago_credito=datos['pago_credito'],
         tipo_cambio=datos['tipo_cambio'],
         valor_cambio=datos.get('valor_cambio', 1.0),
-        lugar_entrega=datos.get('lugar_entrega', ''),  # Opcional
-        detalle_adicional=datos.get('detalle_adicional', ''),  # Opcional
-        creado_por=current_user.id  # Añadir quién creó la cotización
+        lugar_entrega=datos.get('lugar_entrega', ''),
+        detalle_adicional=datos.get('detalle_adicional', ''),
+        creado_por=current_user.id
     )
     db.session.add(nueva_cotizacion)
-    db.session.commit()  # Guarda la cotización para obtener su ID
+    db.session.commit()  # Para obtener el ID
 
-    # Agregar los productos a la cotización
+    # 2) Guardar los productos en la BD
     for producto in datos['productos']:
-        nuevo_producto_cotizacion = ProductoCotizacion(
+        nuevo_prod_cot = ProductoCotizacion(
             cotizacion_id=nueva_cotizacion.id,
             producto_id=producto['id'],
             cantidad=producto['cantidad'],
@@ -739,13 +744,73 @@ def guardar_cotizacion():
             precio_total=producto['precio_total'],
             tipo_compra=producto['tipo_compra']
         )
-        db.session.add(nuevo_producto_cotizacion)
+        db.session.add(nuevo_prod_cot)
 
     db.session.commit()
 
-    return jsonify({'mensaje': 'Cotización guardada exitosamente'}), 201
+    # 3) Retornar JSON indicando que todo fue OK y con el id
+    return jsonify({
+        "id": nueva_cotizacion.id,
+        "mensaje": "Cotización guardada con éxito"
+    }), 201
+
+@app.route('/descargar_excel/<int:cot_id>', methods=['GET'])
+@login_required
+def descargar_excel(cot_id):
+    cotizacion = db.session.get(Cotizacion, cot_id)
+    if not cotizacion:
+        return "No existe la cotización", 404
+
+    productos_cot = ProductoCotizacion.query.filter_by(cotizacion_id=cot_id).all()
+
+    productos_excel = []
+    for pc in productos_cot:
+        producto = db.session.get(Producto, pc.producto_id)
+        nombre_real = producto.nombre if producto else f"Prod ID {pc.producto_id}"
+
+        precio_unitario = pc.precio_unitario
+        precio_total = pc.precio_total
+
+        productos_excel.append({
+            "nombre_producto": nombre_real,
+            "unidad": "UND",
+            "cantidad": pc.cantidad,
+            "precio_unitario": round(precio_unitario, 2),
+            "precio_total": round(precio_total, 2),
+            "marca_modelo": "",  # Mejora futura
+        })
+
+    info_excel = {
+        "cliente": cotizacion.cliente,
+        "solicitante": cotizacion.solicitante,
+        "email": cotizacion.email,
+        "referencia": cotizacion.referencia,
+        "ruc": cotizacion.ruc,
+        "celular": cotizacion.celular,
+        "fecha": cotizacion.fecha,
+        "tipo_cambio": cotizacion.tipo_cambio,
+        "valor_cambio": cotizacion.valor_cambio,
+        "plazo_entrega": cotizacion.plazo_entrega,
+        "pago_credito": cotizacion.pago_credito,
+        "lugar_entrega": cotizacion.lugar_entrega
+    }
+
+    excel_bytes = generate_excel_file(
+        productos_excel,
+        template_path="template.xlsx",
+        info=info_excel
+    )
+
+    return send_file(
+        excel_bytes,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=f"Cotizacion_{cot_id}.xlsx"
+    )
+
 
 @app.route('/cotizacion/<int:id>', methods=['GET'])
+@login_required
 def obtener_cotizacion(id):
     # Verificar si la cotización ya fue convertida a una orden de compra
     orden_venta_existente = db.session.query(OrdenVenta).filter_by(cotizacion_id=id).first()
@@ -787,6 +852,7 @@ def obtener_cotizacion(id):
     return jsonify(cotizacion_data)
 
 @app.route('/cotizaciones', methods=['GET'])
+@login_required
 def obtener_cotizaciones_paginadas():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)

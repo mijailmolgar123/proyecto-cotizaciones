@@ -125,8 +125,8 @@ function agregarAOrden(id) {
                     <td>${producto.stock}</td>
                     <td><input type="number" class="form-control" id="stock-necesario-${producto.id}" value="1" min="1" onchange="calcularPrecioTotal(${producto.id})"></td>
                     <td id="precio-${producto.id}">${producto.precio}</td>
-                    <td id="precio-sin-igv-${producto.id}">${precioSinIGV}</td>
                     <td><input type="number" class="form-control" id="ganancia-${producto.id}" value="0" min="0" onchange="calcularPrecioTotal(${producto.id})"></td>
+                    <td id="precio-sin-igv-${producto.id}">${precioSinIGV}</td>
                     <td id="precio-total-${producto.id}" class="precio-total">${producto.precio}</td>
                     <td id="precio-total-sin-igv-${producto.id}" class="precio-total-sin-igv">${precioSinIGV}</td>
                     <td>
@@ -230,6 +230,7 @@ function guardarCotizacion() {
             alert(response.mensaje);
             $('#modalCotizacion').modal('hide');
             location.reload();
+            window.location = "/descargar_excel/" + response.id;
         },
         error: function(xhr, status, error) {
             console.error('Error al guardar la cotización:', error);
@@ -241,15 +242,24 @@ function guardarCotizacion() {
 function obtenerProductosDeCotizacion() {
     let productos = [];
     $('#orden-venta-lista tr').each(function() {
-        let producto = {
-            id: $(this).find('td').eq(0).text(),
-            cantidad: $(this).find('input').eq(0).val(),
-            precio_unitario: $(this).find('td').eq(4).text(),
-            ganancia: $(this).find('input').eq(1).val(),
-            precio_total: $(this).find('td').eq(7).text(),
-            tipo_compra: $(this).find('select').val()
-        };
-        productos.push(producto);
+        const id = $(this).find('td').eq(0).text();
+        const cantidad = parseFloat($(this).find('input').eq(0).val()) || 1;
+        const precioBase = parseFloat($(this).find('td').eq(4).text()) || 0; // Este ya tiene IGV
+        const ganancia = parseFloat($(this).find('input').eq(1).val()) || 0;
+        const tipo_compra = $(this).find('select').val();
+
+        // Aplicar margen pero SIN quitar IGV (el precio base ya lo incluye)
+        const precioUnitarioConMargen = precioBase * (1 + ganancia / 100);
+        const precioTotalConMargen = precioUnitarioConMargen * cantidad;
+
+        productos.push({
+            id: id,
+            cantidad: cantidad,
+            precio_unitario: precioUnitarioConMargen.toFixed(2),  // <- CON IGV
+            ganancia: ganancia,
+            precio_total: precioTotalConMargen.toFixed(2),        // <- CON IGV
+            tipo_compra: tipo_compra
+        });
     });
     return productos;
 }
