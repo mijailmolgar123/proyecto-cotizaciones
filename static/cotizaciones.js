@@ -155,11 +155,12 @@ function calcularPrecioTotal(id) {
     let precio = parseFloat($(`#precio-${id}`).text());
     let cantidad = parseInt($(`#stock-necesario-${id}`).val());
     let porcentajeGanancia = parseFloat($(`#ganancia-${id}`).val()) || 0;
+    let tipoCambio = parseFloat($('#monto-cambio').val()) || 1;
 
     let precioUnitarioFinal = precio + (precio * (porcentajeGanancia / 100));
     let precioTotal = precioUnitarioFinal * cantidad;
-    let precioTotalSinIGV = precioTotal / 1.18;
-    let precioUnitarioSinIGV = precioUnitarioFinal / 1.18;
+    let precioTotalSinIGV = precioTotal / 1.18/ tipoCambio;
+    let precioUnitarioSinIGV = precioUnitarioFinal / 1.18/ tipoCambio;
 
     $(`#precio-total-${id}`).text(precioTotal.toFixed(2));
     $(`#precio-total-sin-igv-${id}`).text(precioTotalSinIGV.toFixed(2));
@@ -185,8 +186,6 @@ function calcularPrecioTotal(id) {
 function actualizarTotal() {
     let total = 0;
     let totalSinIGV = 0;
-    let totalSinIGVConvertido = 0;
-    const tipoCambio = parseFloat($('#monto-cambio').val()) || 1;
 
     $('.precio-total').each(function() {
         total += parseFloat($(this).text());
@@ -199,7 +198,6 @@ function actualizarTotal() {
 
     $('#total-precio').text(total.toFixed(2));
     $('#total-sin-igv').text(totalSinIGV.toFixed(2));
-    $('#total-sin-igv-convertido').text(totalSinIGVConvertido.toFixed(2));
 }
 
 function guardarCotizacion() {  
@@ -332,6 +330,4 @@ function actualizarPreciosSinIGV() {
 
         totalSinIGVConvertido += convertido;
     });
-
-    $('#total-sin-igv-convertido').text(totalSinIGVConvertido.toFixed(2));
 }

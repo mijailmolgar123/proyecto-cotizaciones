@@ -7,7 +7,6 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, curren
 import os
 from flask import request, jsonify
 from datetime import datetime, timedelta
-from flask import Flask, render_template, redirect, url_for
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import boto3
