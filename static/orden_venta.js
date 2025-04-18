@@ -24,7 +24,7 @@ $(document).ready(function () {
                             <td>${orden.cliente}</td>
                             <td>${orden.solicitante}</td>
                             <td>${orden.fecha_orden_compra || 'No definida'}</td>
-                            <td><span class="badge badge-${orden.estado === 'Pendiente' ? 'warning' : 'success'}">${orden.estado}</span></td>
+                            <td><span class="badge badge-${badgeClass(orden.estado)}">${orden.estado}</span></td>
                             <td>${orden.estado_tiempo}</td>
                             <td>${orden.total}</td>
                             <td>${orden.tipo_cambio}</td>
@@ -52,7 +52,6 @@ $(document).ready(function () {
         });
     }
     
-
     // Limpiar los detalles de la orden seleccionada
     function limpiarDetalleOrden() {
         $('#productos-orden-lista').empty();  // Limpiar la lista de productos
@@ -258,6 +257,7 @@ $(document).ready(function () {
                 console.error('Error al crear la guía de remisión:', err);
             }
         });
+        cargarOrdenesVenta(1);
     };
 
    // Función para obtener el detalle de la guía de remisión
@@ -424,3 +424,13 @@ $('#btn-ver-mas-ordenes').on('click', function () {
         cargarOrdenesVenta(paginaActual + 1);
     }
 });
+
+function badgeClass(estado){
+    switch (estado) {
+      case 'Completada':      return 'success';      // verde
+      case 'Observaciones':   return 'warning';      // amarillo
+      case 'Parcial':         return 'info';         // celeste
+      case 'En Proceso':      return 'secondary';    // gris
+      default:                return 'dark';
+    }
+  }

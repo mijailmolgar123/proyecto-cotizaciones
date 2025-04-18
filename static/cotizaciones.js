@@ -1,205 +1,188 @@
-document.addEventListener("DOMContentLoaded", function () {
-    console.log("cotizaciones.js cargado correctamente");
+const $tbodyBusqueda   = $('#productos-busqueda-lista');
+const $btnVerMas       = $('#btn-ver-mas');
+const $msgFin          = $('#mensaje-fin');
+const $tblDetalle      = $('#orden-venta-lista');
+
+let paginaActual  = 1;
+let totalPaginas  = 1;
+let termino       = '';
+const PER_PAGE    = 20;
+/* al arrancar */
+const esSolesInicial = $('#tipo-moneda-general').val() === 'Soles';
+$('#monto-cambio').prop({ readonly: esSolesInicial, disabled: esSolesInicial });
+
+/* cada vez que cambie la moneda */
+$('#tipo-moneda-general').on('change', function () {
+  const esSoles = $(this).val() === 'Soles';
+
+  $('#monto-cambio')
+    .val(esSoles ? '1.00' : $('#monto-cambio').val())   // fuerza 1.00 si es Soles
+    .prop({ readonly: esSoles, disabled: esSoles });    // bloquea / desbloquea
+
+  recalcTodo();                                         // ← la función que ya tienes
 });
 
-$(document).ready(function() {
-    const tbody = $('#productos-busqueda-lista');
-    const btnVerMas = $('#btn-ver-mas');
-    const mensajeFin = $('#mensaje-fin');
+/* ==========================================================================
+   1.  BÚSQUEDA DE PRODUCTOS / PAGINACIÓN
+   ====================================================================== */
+function buscarProductos(page = 1, term = '') {
+  $btnVerMas.prop('disabled', true).text('Cargando…');
 
-    let paginaActual = 1;
-    let totalPaginas = 1;
-    let terminoBusqueda = '';
-    const perPage = 20;
+  $.ajax({
+    url: '/productos/buscar',
+    method: 'GET',
+    data: { page, per_page: PER_PAGE, termino: term },
+    success(res) {
+      res.productos.forEach(p => {
+        /* NOTE: p.nombre se inserta sin escape → riesgo XSS si el backend no valida los datos. */
+        $tbodyBusqueda.append(`
+          <tr>
+            <td>${p.id}</td>
+            <td>${p.nombre}</td>
+            <td>${p.stock}</td>
+            <td><button class="btn btn-primary" onclick="agregarAOrden(${p.id})">Agregar</button></td>
+          </tr>`);
+      });
 
-    // Cargar la primera página al inicio
-    buscarProductos(1, terminoBusqueda);
-    function buscarProductos(page, termino) {
-        btnVerMas.prop('disabled', true).text('Cargando...');
-        $.ajax({
-            url: '/productos/buscar',
-            method: 'GET',
-            data: {
-                page: page,
-                per_page: perPage,
-                termino: termino
-            },
-            success: function(response) {
-                // Agregar sin borrar
-                response.productos.forEach(function(producto) {
-                    let row = `
-                    <tr>
-                        <td>${producto.id}</td>
-                        <td>${producto.nombre}</td>
-                        <td>${producto.stock}</td>
-                        <td>
-                            <button class="btn btn-primary" onclick="agregarAOrden(${producto.id})">Agregar</button>
-                        </td>
-                    </tr>
-                    `;
-                    tbody.append(row);
-                });
-
-                paginaActual = response.pagina_actual;
-                totalPaginas = response.paginas;
-
-                if (paginaActual >= totalPaginas) {
-                    btnVerMas.hide();
-                    mensajeFin.show();
-                } else {
-                    btnVerMas.show().prop('disabled', false).text('Ver más');
-                    mensajeFin.hide();
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('Error al buscar productos:', error);
-                btnVerMas.prop('disabled', false).text('Ver más');
-            }
-        });
-    }
-    // Al escribir en el input => reiniciar la tabla y cargar la página 1
-    $('#buscar-producto').on('input', function() {
-        terminoBusqueda = $(this).val().trim();
-        paginaActual = 1;
-        totalPaginas = 1;
-        tbody.empty();
-        mensajeFin.hide();
-        btnVerMas.show();
-        buscarProductos(paginaActual, terminoBusqueda);
-    });
-
-    // Botón "Ver más"
-    btnVerMas.on('click', function() {
-        if (paginaActual < totalPaginas) {
-            buscarProductos(paginaActual + 1, terminoBusqueda);
-        }
-    });
-
-    $(document).on('click', '#generar-cotizacion', function () {
-        const productos = $('#orden-venta-lista tr');
-    
-        if (productos.length === 0) {
-            alert('Debe agregar al menos un producto antes de generar la cotización.');
-            return;
-        }
-    
-        // Si hay productos, mostrar el modal
-        $('#modalCotizacion').modal('show');
-    }); 
-    $('#tipo-moneda-general').on('change', function () {
-        let tipo = $(this).val();
-    
-        if (tipo === 'Soles') {
-            $('#monto-cambio').val('1.00').prop('readonly', true);
-        } else {
-            $('#monto-cambio').prop('readonly', false);
-        }
-    
-        actualizarPreciosSinIGV();
-    });
-    
-    if ($('#tipo-moneda-general').val() === 'Soles') {
-        $('#monto-cambio').val('1.00').prop('readonly', true);
-    }
-    $('#monto-cambio').on('input', function () {
-        actualizarPreciosSinIGV();
-    });
-});
-
-function agregarAOrden(id) {
-    // Verificar si el producto ya está en la lista
-    if ($(`#producto-${id}`).length > 0) {
-        alert('Este producto ya ha sido agregado a la cotización.');
-        return;
-    }
-
-    $.ajax({
-        url: `/productos/${id}`,
-        method: 'GET',
-        success: function(producto) {
-            let precioSinIGV = (producto.precio / 1.18).toFixed(2);
-            let row = `
-                <tr id="producto-${producto.id}" data-precio-original-sin-igv="${precioSinIGV}">
-                    <td>${producto.id}</td>
-                    <td>${producto.nombre}</td>
-                    <td>${producto.stock}</td>
-                    <td><input type="number" class="form-control" id="stock-necesario-${producto.id}" value="1" min="1" onchange="calcularPrecioTotal(${producto.id})"></td>
-                    <td id="precio-${producto.id}">${producto.precio}</td>
-                    <td><input type="number" class="form-control" id="ganancia-${producto.id}" value="0" min="0" onchange="calcularPrecioTotal(${producto.id})"></td>
-                    <td id="precio-sin-igv-${producto.id}">${precioSinIGV}</td>
-                    <td id="precio-total-${producto.id}" class="precio-total">${producto.precio}</td>
-                    <td id="precio-total-sin-igv-${producto.id}" class="precio-total-sin-igv">${precioSinIGV}</td>
-                    <td>
-                        <select class="form-control" id="tipo-compra-${producto.id}">
-                            <option value="stock">Stock</option>
-                            <option value="local">Compra Local</option>
-                            <option value="pedido">Pedido</option>
-                        </select>
-                    </td>
-                    <td><button class="btn btn-danger" onclick="eliminarDeOrden(${producto.id})">Eliminar</button></td>
-                </tr>
-            `;
-            $('#orden-venta-lista').append(row);
-            calcularPrecioTotal(producto.id); // Asegurarnos de que se aplique la lógica de restricciones inmediatamente
-            actualizarTotal();
-        }
-    });
+      paginaActual = res.pagina_actual;
+      totalPaginas = res.paginas;
+      if (paginaActual >= totalPaginas) { $btnVerMas.hide(); $msgFin.show(); }
+      else                             { $btnVerMas.show().prop('disabled', false).text('Ver más'); $msgFin.hide(); }
+    },
+    error: err => { console.error('Error buscando productos', err); $btnVerMas.prop('disabled', false).text('Ver más'); }
+  });
 }
 
+/* ----------------- listeners de búsqueda ----------------- */
+$('#buscar-producto').on('input', function () {
+  /* NOTE: Considera aplicar debounce (~300 ms) para reducir peticiones cuando el usuario escribe rápido. */
+  termino       = $(this).val().trim();
+  paginaActual  = 1; totalPaginas = 1;
+  $tbodyBusqueda.empty(); $msgFin.hide(); $btnVerMas.show();
+  buscarProductos(1, termino);
+});
+
+$btnVerMas.on('click', () => { if (paginaActual < totalPaginas) buscarProductos(paginaActual + 1, termino); });
+
+/* Carga inicial */
+buscarProductos();
+
+/* ==========================================================================
+   2.  AGREGAR PRODUCTO A LA COTIZACIÓN Y CONSTRUIR FILA
+   ====================================================================== */
+window.agregarAOrden = function (id) {
+  if ($(`#producto-${id}`).length) { alert('Ya está agregado.'); return; }
+
+  $.ajax({
+    url: `/productos/${id}`,
+    method: 'GET',
+    success: p => {
+      const precioSinIGVSoles = (p.precio / 1.18).toFixed(2); // sin IGV, soles
+      $tblDetalle.append(`
+        <tr id="producto-${p.id}" data-precio-soles="${p.precio}">
+          <td>${p.id}</td>
+          <td>${p.nombre}</td>
+          <td>${p.stock}</td>
+
+          <td><input type="number" class="form-control cant-necesaria" value="1" min="1"></td>
+          <td class="precio-soles">${p.precio}</td>
+
+          <td><input type="number" class="form-control margen" value="0" min="0"></td>
+          <td class="precio-unit-sin-igv">${precioSinIGVSoles}</td>
+          <td class="precio-total">${p.precio}</td>
+          <td class="precio-total-sin-igv">${precioSinIGVSoles}</td>
+
+          <td>
+            <select class="form-control tipo-compra">
+              <option value="stock">Stock</option>
+              <option value="local">Compra Local</option>
+              <option value="pedido">Pedido</option>
+            </select>
+          </td>
+          <td><button class="btn btn-danger" onclick="eliminarDeOrden(${p.id})">Eliminar</button></td>
+        </tr>`);
+
+      recalcFila(p.id);
+      recalcTotales();
+    },
+    error: err => console.error('Error obteniendo producto', err)
+  });
+};
+
+/* ==========================================================================
+   3.  RECÁLCULO FILA  +  TOTALES
+   ====================================================================== */
+function recalcFila(id) {
+  const $fila      = $(`#producto-${id}`);
+  if (!$fila.length) return;
+
+  // FIXME: Sintaxis inválida — la llamada a .val().max="${p.stock}" rompe la evaluación y debe eliminarse.
+  const cantidad   = parseFloat($fila.find('.cant-necesaria').val()) || 1;
+  const margen     = parseFloat($fila.find('.margen').val())         || 0;
+  const precioSolesIGV = parseFloat($fila.data('precio-soles'))      || 0;
+
+  /* 1) precio unitario CON IGV + margen en soles */
+  const pUniFinalIGV_soles = precioSolesIGV * (1 + margen / 100);
+  const pTotFinalIGV_soles = pUniFinalIGV_soles * cantidad;
+
+  /* 2) precios SIN IGV en moneda seleccionada */
+  const moneda   = $('#tipo-moneda-general').val();
+  const tc       = parseFloat($('#monto-cambio').val()) || 1;
+  const divisor  = (moneda === 'Soles') ? 1 : tc;
+
+  const pUniSinIGV = (pUniFinalIGV_soles / 1.18) / divisor;
+  const pTotSinIGV = pUniSinIGV * cantidad;
+
+  /* 3) pinta celdas */
+  $fila.find('.precio-unit-sin-igv')   .text(pUniSinIGV .toFixed(2));
+  $fila.find('.precio-total-sin-igv') .text(pTotSinIGV.toFixed(2));
+  $fila.find('.precio-total')         .text(pTotFinalIGV_soles.toFixed(2));
+
+  /* 4) bloqueo tipo-compra si la cantidad cabe en stock */
+  const stock = parseInt($fila.find('td').eq(2).text()) || 0;
+  const $sel  = $fila.find('.tipo-compra');
+  if (cantidad <= stock) { $sel.val('stock').prop('disabled', true); }
+  else { $sel.prop('disabled', false); }
+}
+
+function recalcTotales() {
+  /* TODO: Unifica los bucles para recorrer el DOM una sola vez y mejorar el rendimiento. */
+  let totIGV = 0, totSinIGV = 0;
+  $tblDetalle.find('.precio-total').each((_,td)=> totIGV   += parseFloat($(td).text()) || 0);
+  $tblDetalle.find('.precio-total-sin-igv').each((_,td)=> totSinIGV += parseFloat($(td).text()) || 0);
+
+  $('#total-precio').text(totIGV.toFixed(2));
+  $('#total-sin-igv').text(totSinIGV.toFixed(2));
+}
+
+function recalcTodo() {
+  $tblDetalle.find('tr').each((_,tr)=>{ const id = $(tr).attr('id').split('-')[1]; recalcFila(id); });
+  recalcTotales();
+}
+
+/* ---------------- inputs delegados en la tabla ---------------- */
+$tblDetalle.on('input', '.cant-necesaria, .margen', function(){
+  const id = $(this).closest('tr').attr('id').split('-')[1];
+  recalcFila(id); recalcTotales();
+});
+
+/* ==========================================================================
+   4.  MONEDA & TIPO DE CAMBIO
+   ====================================================================== */
+$('#tipo-moneda-general').on('change', function(){
+  const esSoles = $(this).val()==='Soles';
+  $('#monto-cambio').prop('readonly', esSoles);
+  if (esSoles) $('#monto-cambio').val('1.00');
+  recalcTodo();
+});
+
+$('#monto-cambio').on('input', recalcTodo);
+
+// FIXME: eliminarDeOrden llama a actualizarTotal(), función inexistente; usa recalcTotales() para mantener consistencia.
 function eliminarDeOrden(id) {
     $(`#producto-${id}`).remove();
-    actualizarTotal();
+    recalcTotales();
 }
-
-function calcularPrecioTotal(id) {
-    let precio = parseFloat($(`#precio-${id}`).text());
-    let cantidad = parseInt($(`#stock-necesario-${id}`).val());
-    let porcentajeGanancia = parseFloat($(`#ganancia-${id}`).val()) || 0;
-    let tipoCambio = parseFloat($('#monto-cambio').val()) || 1;
-
-    let precioUnitarioFinal = precio + (precio * (porcentajeGanancia / 100));
-    let precioTotal = precioUnitarioFinal * cantidad;
-    let precioTotalSinIGV = precioTotal / 1.18/ tipoCambio;
-    let precioUnitarioSinIGV = precioUnitarioFinal / 1.18/ tipoCambio;
-
-    $(`#precio-total-${id}`).text(precioTotal.toFixed(2));
-    $(`#precio-total-sin-igv-${id}`).text(precioTotalSinIGV.toFixed(2));
-    $(`#precio-sin-igv-${id}`).text(precioUnitarioSinIGV.toFixed(2));
-
-    let stockDisponible = parseInt($(`#producto-${id} td:nth-child(3)`).text());
-
-    let tipoCompra = $(`#tipo-compra-${id}`);
-    if (cantidad <= stockDisponible) {
-        tipoCompra.html('<option value="stock">Stock</option>').prop('disabled', true);
-    } else {
-        tipoCompra.html(`
-            <option value="local">Compra Local</option>
-            <option value="pedido">Pedido</option>
-        `).prop('disabled', false);
-    }
-
-    actualizarTotal();
-    actualizarPreciosSinIGV();
-
-}
-
-function actualizarTotal() {
-    let total = 0;
-    let totalSinIGV = 0;
-
-    $('.precio-total').each(function() {
-        total += parseFloat($(this).text());
-    });
-
-    $('.precio-total-sin-igv').each(function() {
-        const valor = parseFloat($(this).text()) || 0;
-        totalSinIGV += valor;
-    });
-
-    $('#total-precio').text(total.toFixed(2));
-    $('#total-sin-igv').text(totalSinIGV.toFixed(2));
-}
-
 function guardarCotizacion() {  
     let cotizacion = {
         cliente: $('#cliente').val(),
@@ -310,24 +293,13 @@ function crearPreProducto() {
     });
 }
 
-function actualizarPreciosSinIGV() {
-    const tipoCambio = parseFloat($('#monto-cambio').val()) || 1;
-    const tipoMoneda = $('#tipo-moneda-general').val();
-    let totalSinIGVConvertido = 0;
-
-    $('#orden-venta-lista tr').each(function () {
-        const fila = $(this);
-        const cantidad = parseInt(fila.find('input').eq(0).val()) || 1;
-        const precioTotalSinIGVTexto = fila.find('.precio-total-sin-igv').text();
-        const precioTotalSinIGV = parseFloat(precioTotalSinIGVTexto) || 0;
-
-        let convertido;
-        if (tipoMoneda === "Soles") {
-            convertido = precioTotalSinIGV;
-        } else {
-            convertido = precioTotalSinIGV / tipoCambio;
-        }
-
-        totalSinIGVConvertido += convertido;
-    });
-}
+/* ── 5 · Generar cotización ───────────────────────────────────────── */
+/* coloca esto después de buscarProductos(); o dentro del $(document).ready */
+$('#generar-cotizacion').on('click', function () {
+    if (!$tblDetalle.find('tr').length) {
+      alert('Debes agregar al menos un producto antes de generar la cotización.');
+      return;
+    }
+    $('#modalCotizacion').modal('show');      // ya tienes el modal en la vista
+  });
+  

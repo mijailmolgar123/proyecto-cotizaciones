@@ -137,6 +137,9 @@ $(document).ready(function() {
                     alert('Orden de venta generada exitosamente.');
                     $('#detalleCotizacionModal').modal('hide');
                     reiniciarYRecargarCotizaciones();
+                    // al éxito de transformar:
+                    if (window.actualizarTablaProductos) { actualizarTablaProductos(); }
+
                 },
                 error: function(xhr, status, error) {
                     console.error('Error al obtener los detalles de la orden de venta:', xhr.responseText);

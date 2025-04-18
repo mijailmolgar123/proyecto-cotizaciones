@@ -5,11 +5,18 @@ $(document).ready(function () {
     let terminoBusqueda = '';
     let totalPaginas = 1;
     const tbody = $('#productos-lista');
+    let xhrEnCurso = null; 
 
     // Cargar página
     function cargarPagina(page) {
-        $('#btn-ver-mas').prop('disabled', true).text('Cargando...');
-        $.ajax({
+        // 1. Si ya hay una petición activa la cancelamos
+        if (xhrEnCurso && xhrEnCurso.readyState !== 4) {
+            xhrEnCurso.abort();
+        }
+
+        $('#btn-ver-mas').prop('disabled', true).text('Cargando…');
+
+        xhrEnCurso = $.ajax({
             url: '/productos',
             method: 'GET',
             data: {
@@ -43,9 +50,13 @@ $(document).ready(function () {
                     $('#mensaje-fin').hide();
                 }
             },
-            error: function () {
-                alert('Error al cargar productos');
-                $('#btn-ver-mas').prop('disabled', false).text('Ver más');
+            error: function (xhr, status) {
+                if (status !== 'abort') {     // ignorar los aborts controlados
+                    alert('Error al cargar productos');
+                }
+            },
+            complete: function () {
+                xhrEnCurso = null;            // liberamos la referencia
             }
         });
     }
@@ -55,16 +66,25 @@ $(document).ready(function () {
         cargarPagina(paginaActual + 1);
     });
 
-    // Búsqueda
-    $('#buscar-producto').on('input', function () {
-        terminoBusqueda = $(this).val().trim().toLowerCase();
+    // Función genérica
+    function debounce(fn, delay) {
+        let t;
+        return function(...args) {
+            clearTimeout(t);
+            t = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+
+    // Input ≈ 300 ms después de dejar de teclear
+    $('#buscar-producto').on('input', debounce(function () {
+        terminoBusqueda = $(this).val().trim();
         paginaActual = 1;
         totalPaginas = 1;
         tbody.empty();
         $('#mensaje-fin').hide();
         $('#btn-ver-mas').show();
         cargarPagina(1);
-    });
+    }, 300));
 
     // Carga inicial
     cargarPagina(1);

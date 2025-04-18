@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, send_file, make_response
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy.orm import Session
@@ -11,9 +11,8 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import boto3
 import json
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.dialects.postgresql import TSVECTOR
-from sqlalchemy import text
 from math import ceil
 from sqlalchemy.orm import joinedload
 from flask import Flask, request, jsonify, send_file
@@ -483,38 +482,27 @@ def crear_producto():
 
 @app.route('/productos', methods=['GET'])
 def obtener_productos():
-    """
-    Endpoint con paginación y Full-Text Search (FTS) en PostgreSQL.
-    - Parámetros: page, per_page, termino
-    - Devuelve: { productos, total, paginas, pagina_actual }
-    """
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
-    termino = request.args.get('termino', '', type=str).strip()
+    page       = request.args.get('page', 1,  type=int)
+    per_page   = request.args.get('per_page', 20, type=int)
+    termino_raw = request.args.get('termino', '', type=str).strip()
 
-    # Base query: solo productos activos
-    query = Producto.query.filter(Producto.activo == True)
+    query = Producto.query.filter(Producto.activo.is_(True))
 
-    # Si hay término, aplicar FTS:
-    if termino:
-        # Construye un string para to_tsquery con :*
-        # Ej: termino = "cas aca" => "cas:* & aca:*"
-        tokens = termino.split()
-        if tokens:
-            tsquery_string = ' & '.join([f"{t.strip()}:*" for t in tokens])
-            # Aplica FTS con prefijos
+    # ───── búsqueda ────────────────────────────────────────────
+    if termino_raw:
+        tokens = [t.strip() for t in termino_raw.split() if len(t.strip()) > 2]
+
+        if tokens:                                # usamos FTS
+            tsquery = ' & '.join(f"{t}:*" for t in tokens)
             query = query.filter(
-                Producto.search_vector.op('@@')(
-                    func.to_tsquery('spanish', tsquery_string)
-                )
+                Producto.search_vector.op('@@')(func.to_tsquery('spanish', tsquery))
             )
+        else:                                     # fallback para 1‑2 letras o stop‑words
+            patron = f"%{termino_raw.lower()}%"
+            query  = query.filter(Producto.nombre.ilike(patron))
 
-    # Paginamos la query
-    productos_paginados = query.order_by(Producto.id.asc()).paginate(
-        page=page, 
-        per_page=per_page, 
-        error_out=False
-    )
+    productos_paginados = query.order_by(Producto.id.asc()) \
+                               .paginate(page=page, per_page=per_page, error_out=False)
 
     # Armamos la respuesta JSON
     productos_json = []
@@ -807,7 +795,6 @@ def descargar_excel(cot_id):
         download_name=f"Cotizacion_{cot_id}.xlsx"
     )
 
-
 @app.route('/cotizacion/<int:id>', methods=['GET'])
 @login_required
 def obtener_cotizacion(id):
@@ -940,6 +927,15 @@ def transformar_orden_venta(cotizacion_id):
             estado='Pendiente'
         )
         db.session.add(producto_orden)
+        prod_obj = db.session.get(Producto, producto['id'])
+        if prod_obj:                                 # existe en BD
+            cant = int(producto['cantidad'])
+            if prod_obj.stock is None:               # por si estuviese null
+                prod_obj.stock = 0
+            if prod_obj.stock < cant:
+                # aquí decides: o permites negativo o abortas
+                return jsonify({'mensaje': f'Sin stock suficiente de {prod_obj.nombre}'}), 400
+            prod_obj.stock -= cant                   # resta
 
     # Determinar estado final de la cotización
     if total_productos_seleccionados == total_productos_cotizacion:
@@ -1011,12 +1007,13 @@ def obtener_ordenes_venta():
         plazo_entrega = cotizacion.plazo_entrega if cotizacion else "No definido"
         pago_credito = cotizacion.pago_credito if cotizacion else "No definido"
         total_soles = orden.total
+        valor_cambio  = cotizacion.valor_cambio if cotizacion else 1.0 
 
         total_convertido = None
-        if tipo_cambio.lower() == "dólares":
-            total_convertido = f"${(total_soles / 3.8):.2f} (USD)"
-        elif tipo_cambio.lower() == "euros":
-            total_convertido = f"€{(total_soles / 4.1):.2f} (EUR)"
+        if tipo_cambio.lower() == "dólares" and valor_cambio:
+            total_convertido = f"${total_soles / valor_cambio:.2f} (USD)"
+        elif tipo_cambio.lower() == "euros" and valor_cambio:
+            total_convertido = f"€{total_soles / valor_cambio:.2f} (EUR)"
 
         estado_tiempo = "Fecha no definida"
         if orden.fecha_orden_compra:
@@ -1159,6 +1156,9 @@ def crear_guia_remision(orden_id):
         db.session.add(nuevo_producto_guia)
 
     db.session.commit()  # Guardamos en la BD
+    orden = db.session.get(OrdenVenta, orden_id)
+    orden.estado = calcular_estado_orden(orden)
+    db.session.commit()
 
     return jsonify({'mensaje': 'Guía de remisión creada con éxito'}), 201
 
@@ -1349,7 +1349,43 @@ def actualizar_guia(id_guia):
         guia.imagen_url = f'/static/uploads/{filename}'
 
     db.session.commit()
+    orden = guia.orden_venta           # gracias al backref
+    orden.estado = calcular_estado_orden(orden)
+    db.session.commit()
     return jsonify({'mensaje': 'Guía actualizada correctamente'}), 200
+
+# ---------- helpers de Órdenes ----------
+def calcular_estado_orden(orden: OrdenVenta) -> str:
+    """
+    Devuelve el estado ‘En Proceso / Parcial / Completada / Observaciones’.
+    Se apoya en las guías de remisión existentes.
+    """
+    if not orden.guias_remision:
+        return "En Proceso"
+
+    total_prod  = sum(p.cantidad for p in orden.productos)
+    total_enviado = 0
+    hay_obs, hay_pend = False, False
+
+    for guia in orden.guias_remision:
+        if guia.estado.lower() in ("recibido", "entregado"):
+            pass
+        elif guia.estado.lower() == "recibido con observaciones":
+            hay_obs = True
+        else:  # pendiente
+            hay_pend = True
+
+        total_enviado += sum(pg.cantidad for pg in guia.productos)
+
+    if total_enviado < total_prod:
+        return "Parcial"
+
+    # todo enviado:
+    if hay_obs:
+        return "Observaciones"
+    if hay_pend:
+        return "Parcial"           # aún falta cerrar las guías
+    return "Completada"
 
 @app.route('/eliminar_guia/<int:guia_id>', methods=['DELETE', 'POST'])
 def eliminar_guia(guia_id):
