@@ -134,7 +134,7 @@ $(document).ready(function() {
                     productos: productosSeleccionados
                 }),
                 success: function(response) {
-                    alert('Orden de venta generada exitosamente.');
+                    alert(response.lista_deseo_info || 'Orden de venta generada exitosamente.');
                     $('#detalleCotizacionModal').modal('hide');
                     reiniciarYRecargarCotizaciones();
                     // al éxito de transformar:

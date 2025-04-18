@@ -25,6 +25,10 @@ $(document).ready(function () {
                 termino: terminoBusqueda
             },
             success: function (response) {
+                if (page === 1) {            // si estamos “reiniciando” la lista
+                    tbody.empty();           // limpiamos solo una vez
+                }
+            
                 response.productos.forEach(producto => {
                     let row = '<tr>';
                     columnasVisibles.forEach(columna => {
@@ -33,7 +37,7 @@ $(document).ready(function () {
                     row += `
                         <td>
                             <button class="btn btn-warning" onclick="mostrarFormularioEditar(${producto.id})">Editar</button>
-                            <button class="btn btn-danger" onclick="eliminarProducto(${producto.id})">Eliminar</button>
+                            <button class="btn btn-danger"  onclick="eliminarProducto(${producto.id})">Eliminar</button>
                         </td>
                     </tr>`;
                     tbody.append(row);

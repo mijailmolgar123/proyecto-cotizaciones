@@ -481,52 +481,59 @@ def crear_producto():
     }), 201
 
 @app.route('/productos', methods=['GET'])
+@login_required
 def obtener_productos():
-    page       = request.args.get('page', 1,  type=int)
-    per_page   = request.args.get('per_page', 20, type=int)
+    page        = request.args.get('page', 1, type=int)
+    per_page    = request.args.get('per_page', 20, type=int)
     termino_raw = request.args.get('termino', '', type=str).strip()
 
     query = Producto.query.filter(Producto.activo.is_(True))
 
-    # ───── búsqueda ────────────────────────────────────────────
+    # ──────────────── BÚSQUEDA ──────────────────────────────
     if termino_raw:
         tokens = [t.strip() for t in termino_raw.split() if len(t.strip()) > 2]
 
-        if tokens:                                # usamos FTS
-            tsquery = ' & '.join(f"{t}:*" for t in tokens)
-            query = query.filter(
+        if tokens:
+            tsquery = ' & '.join([f"{t}:*" for t in tokens])
+            query_fts = query.filter(
                 Producto.search_vector.op('@@')(func.to_tsquery('spanish', tsquery))
             )
-        else:                                     # fallback para 1‑2 letras o stop‑words
+
+            if query_fts.count() == 0:
+                patron = f"%{termino_raw.lower()}%"
+                query = query.filter(func.lower(Producto.nombre).ilike(patron))
+            else:
+                query = query_fts
+        else:
             patron = f"%{termino_raw.lower()}%"
-            query  = query.filter(Producto.nombre.ilike(patron))
+            query = query.filter(func.lower(Producto.nombre).ilike(patron))
 
-    productos_paginados = query.order_by(Producto.id.asc()) \
-                               .paginate(page=page, per_page=per_page, error_out=False)
+    # ──────────────── PAGINACIÓN ────────────────────────────
+    productos_paginados = (
+        query.order_by(Producto.id.asc())
+             .paginate(page=page, per_page=per_page, error_out=False)
+    )
 
-    # Armamos la respuesta JSON
-    productos_json = []
-    for p in productos_paginados.items:
-        productos_json.append({
-            'id': p.id,
-            'nombre': p.nombre,
-            'descripcion': p.descripcion,
-            'precio': p.precio,
-            'stock': p.stock,
-            'proveedor': p.proveedor,
-            'sucursal': p.sucursal,
-            'almacen': p.almacen,
-            'codigo_item': p.codigo_item,
-            'codigo_barra': p.codigo_barra,
-            'unidad': p.unidad,
-            'activo': p.activo
-        })
+    productos_json = [{
+        'id'          : p.id,
+        'nombre'      : p.nombre,
+        'descripcion' : p.descripcion,
+        'precio'      : p.precio,
+        'stock'       : p.stock,
+        'proveedor'   : p.proveedor,
+        'sucursal'    : p.sucursal,
+        'almacen'     : p.almacen,
+        'codigo_item' : p.codigo_item,
+        'codigo_barra': p.codigo_barra,
+        'unidad'      : p.unidad,
+        'activo'      : p.activo
+    } for p in productos_paginados.items]
 
     return jsonify({
-        'productos': productos_json,
-        'total': productos_paginados.total,
-        'paginas': productos_paginados.pages,
-        'pagina_actual': productos_paginados.page
+        'productos'     : productos_json,
+        'total'         : productos_paginados.total,
+        'paginas'       : productos_paginados.pages,
+        'pagina_actual' : productos_paginados.page
     })
 
 @app.route('/productos/<int:id>', methods=['GET'])
@@ -887,7 +894,6 @@ def transformar_orden_venta(cotizacion_id):
     if not cotizacion:
         return jsonify({'mensaje': 'Cotización no encontrada'}), 404
 
-    # Obtener datos del request
     datos = request.get_json()
     if not datos or 'productos' not in datos:
         return jsonify({'mensaje': 'Datos inválidos'}), 400
@@ -896,7 +902,6 @@ def transformar_orden_venta(cotizacion_id):
     total_productos_cotizacion = len(cotizacion.productos)
     total_productos_seleccionados = len(productos_seleccionados)
 
-    # Crear nueva orden de Venta con los datos de la cotización
     nueva_orden = OrdenVenta(
         cotizacion_id=cotizacion.id,
         cliente=cotizacion.cliente,
@@ -913,39 +918,90 @@ def transformar_orden_venta(cotizacion_id):
         fecha_orden_compra=datos['fecha_orden_compra']
     )
     db.session.add(nueva_orden)
-    db.session.commit()  # Commit para obtener el ID de la orden de compra
-
-    # Añadir productos seleccionados a la orden de compra
-    for producto in productos_seleccionados:
-        producto_orden = ProductoOrden(
-            orden_id=nueva_orden.id,
-            producto_id=producto['id'],
-            cantidad=producto['cantidad'],
-            precio_unitario=producto['precio_unitario'],
-            precio_total=producto['precio_total'],
-            tipo_compra='stock',
-            estado='Pendiente'
-        )
-        db.session.add(producto_orden)
-        prod_obj = db.session.get(Producto, producto['id'])
-        if prod_obj:                                 # existe en BD
-            cant = int(producto['cantidad'])
-            if prod_obj.stock is None:               # por si estuviese null
-                prod_obj.stock = 0
-            if prod_obj.stock < cant:
-                # aquí decides: o permites negativo o abortas
-                return jsonify({'mensaje': f'Sin stock suficiente de {prod_obj.nombre}'}), 400
-            prod_obj.stock -= cant                   # resta
-
-    # Determinar estado final de la cotización
-    if total_productos_seleccionados == total_productos_cotizacion:
-        cotizacion.estado = 'Finalizado Total'
-    else:
-        cotizacion.estado = 'Finalizado Parcial'
-
     db.session.commit()
 
-    return jsonify({'mensaje': 'Orden de Venta generada correctamente.'}), 200
+    # Productos sin stock suficiente
+    productos_faltantes = []
+
+    for producto in productos_seleccionados:
+        prod_obj = db.session.get(Producto, int(producto['id']))
+        cantidad_deseada = int(producto['cantidad'])
+
+        if prod_obj:
+            cantidad_en_stock = prod_obj.stock or 0
+            faltante = cantidad_deseada - cantidad_en_stock
+
+            if faltante > 0:
+                # Agrega el producto a la orden, pero con lo que hay en stock
+                producto_orden = ProductoOrden(
+                    orden_id=nueva_orden.id,
+                    producto_id=prod_obj.id,
+                    cantidad=cantidad_en_stock,
+                    precio_unitario=producto['precio_unitario'],
+                    precio_total=float(producto['precio_unitario']) * cantidad_en_stock,
+                    tipo_compra='stock',
+                    estado='Pendiente'
+                )
+                db.session.add(producto_orden)
+                prod_obj.stock = 0
+
+                productos_faltantes.append({
+                    'producto': prod_obj,
+                    'cantidad_faltante': faltante
+                })
+
+            else:
+                # Stock suficiente
+                producto_orden = ProductoOrden(
+                    orden_id=nueva_orden.id,
+                    producto_id=prod_obj.id,
+                    cantidad=cantidad_deseada,
+                    precio_unitario=producto['precio_unitario'],
+                    precio_total=producto['precio_total'],
+                    tipo_compra='stock',
+                    estado='Pendiente'
+                )
+                db.session.add(producto_orden)
+                prod_obj.stock -= cantidad_deseada
+
+    # Crear lista de deseos si hay faltantes
+    """
+    mensaje_lista_deseo = "No fue necesario generar una Lista de Deseos."
+    if productos_faltantes:
+        nueva_lista = ListaDeseos(
+            cliente=cotizacion.cliente,
+            ruc=cotizacion.ruc,
+            creado_por=current_user.id,
+            prioridad='Alta',
+            comentario=f'Generada automáticamente desde cotización {cotizacion.id}'
+        )
+        db.session.add(nueva_lista)
+        db.session.flush()  # Obtener ID antes del commit
+
+        for item in productos_faltantes:
+            item_deseo = ItemDeseo(
+                lista_deseos_id=nueva_lista.id,
+                producto_id=item['producto'].id,
+                cantidad_necesaria=item['cantidad_faltante'],
+                precio_referencia=item['producto'].precio or 0.0,
+                estado_item='Pendiente'
+            )
+            db.session.add(item_deseo)
+
+        mensaje_lista_deseo = (
+            f"Se generó una Lista de Deseos con los siguientes productos:\n" +
+            "\n".join(f"- {item['producto'].nombre} (faltan {item['cantidad_faltante']} unidades)"
+                      for item in productos_faltantes)
+        )
+
+    cotizacion.estado = 'Finalizado Total' if total_productos_seleccionados == total_productos_cotizacion else 'Finalizado Parcial'
+    """
+    db.session.commit()
+
+    return jsonify({
+        'mensaje': 'Orden de Venta generada correctamente.',
+        #'lista_deseo_info': mensaje_lista_deseo
+    }), 200
 
 @app.route('/rechazar_cotizacion/<int:cotizacion_id>', methods=['POST'])
 @login_required
