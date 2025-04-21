@@ -4,11 +4,11 @@ $(document).ready(function () {
     const productosPorPagina = 20;
     let terminoBusqueda = '';
     let totalPaginas = 1;
-    const tbody = $('#productos-lista');
     let xhrEnCurso = null; 
 
+
     // Cargar página
-    function cargarPagina(page) {
+    window.cargarPagina = function(page){
         // 1. Si ya hay una petición activa la cancelamos
         if (xhrEnCurso && xhrEnCurso.readyState !== 4) {
             xhrEnCurso.abort();
@@ -67,7 +67,7 @@ $(document).ready(function () {
 
     // Botón Ver más
     $('#btn-ver-mas').on('click', function () {
-        cargarPagina(paginaActual + 1);
+        window.cargarPagina(paginaActual + 1);
     });
 
     // Función genérica
@@ -87,12 +87,14 @@ $(document).ready(function () {
         tbody.empty();
         $('#mensaje-fin').hide();
         $('#btn-ver-mas').show();
-        cargarPagina(1);
+        window.cargarPagina(1);
     }, 300));
 
     // Carga inicial
-    cargarPagina(1);
+    window.cargarPagina(1);
 });
+
+const tbody = $('#productos-lista');
 
 function navigateTo(role) {
     window.location.href = `/${role}_dashboard`;
@@ -175,9 +177,11 @@ function agregarProducto() {
         contentType: 'application/json',
         data: JSON.stringify(producto),
         success: function(response) {
-            alert(response.mensaje);
-            cargarProductos();
-            cerrarFormularioAgregar();
+            alert(response.mensaje);  // primero mostramos alerta
+            setTimeout(() => {
+                cerrarFormularioAgregar();     // luego limpiamos el formulario
+                resetearYCargarPrimeraPagina(); // y recargamos la lista
+            }, 100);  // 100 ms para dar margen a la animación si fuera necesario
         },
         error: function(jqXHR, textStatus, errorThrown) {
             console.error('Error al agregar el producto:', textStatus, errorThrown);
@@ -206,9 +210,6 @@ function eliminarProducto(id) {
 function cerrarFormularioAgregar() {
     $('#formulario').empty(); // Limpia el formulario y lo oculta
 }
-// Definir las columnas que se mostrarán
-const columnasVisibles = ['id', 'nombre', 'precio', 'stock', 'proveedor', 'codigo_item', 'unidad'];
-const productosPorPagina = 20;
 
     // Función para mostrar el formulario de edición
 function mostrarFormularioEditar(id) {
@@ -311,9 +312,11 @@ function editarProducto(id) {
         data: JSON.stringify(producto),
         success: function(response) {
             alert('Producto actualizado con éxito');
-            cerrarFormularioEdicion();
-            cargarProductos();
-        },
+            setTimeout(() => {
+                cerrarFormularioEdicion();
+                resetearYCargarPrimeraPagina();
+            }, 100);
+        },        
         error: function(jqXHR, textStatus, errorThrown) {
             console.error('Error al actualizar el producto:', textStatus, errorThrown);
             alert('Hubo un error al actualizar el producto. Por favor, intenta nuevamente.');
