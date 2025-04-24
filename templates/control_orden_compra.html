@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Control Órdenes de Compra{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Órdenes de Compra</h1>
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>ID</th><th>OC Asoc.</th><th># OC</th><th>Fecha</th>
+          <th>Proveedor</th><th>Estado</th><th>Creado por</th><th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="oc-lista"></tbody>
+    </table>
+    <div class="text-center">
+      <button id="btn-ver-mas-oc" class="btn btn-primary">Ver más</button>
+    </div>
+  </div>
+  
+
+<!-- Modal: Detalle de Orden de Compra -->
+<div class="modal fade" id="detalleOCModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Detalle Orden de Compra</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <h5>Productos</h5>
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Producto (P.O.C. ID)</th>
+              <th>Cant. Ordenada</th>
+              <th>Cant. Recibida</th>
+              <th>Por Recibir</th>
+              <th>Cant. a Incluir</th>
+            </tr>
+          </thead>
+          <tbody id="productos-orden-compra-lista">
+            <!-- Se llenará dinámicamente -->
+          </tbody>
+        </table>
+
+        <h5>Crear Guía de Remisión</h5>
+        <div class="form-inline mb-3">
+          <input type="text" id="numeroGuiaCompra" class="form-control mr-2" placeholder="Número de Guía">
+          <button class="btn btn-success" onclick="generarGuiaCompra()">Generar Guía</button>
+        </div>
+
+        <h5>Guías de Remisión Existentes</h5>
+        <table class="table table-striped">
+          <thead>
+            <tr><th># Guía</th><th>Fecha</th><th>Estado</th><th>Acciones</th></tr>
+          </thead>
+          <tbody id="lista-guias-compra"></tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Detalle / Edición de Guía de Remisión -->
+<div class="modal fade" id="detalleGCModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Detalle Guía de Remisión Compra</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-sm">
+          <thead><tr><th>Producto</th><th>Cant. Recibida</th><th>Estado</th></tr></thead>
+          <tbody id="gc-productos-lista"></tbody>
+        </table>
+        <div class="form-group">
+          <label for="gc-estado">Estado:</label>
+          <select id="gc-estado" class="form-control">
+            <option>Pendiente</option>
+            <option>Recibido Parcial</option>
+            <option>Recibido Total</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="gc-comentario">Comentario:</label>
+          <textarea id="gc-comentario" class="form-control" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="volverDetalleOC()">Volver</button>
+        <button class="btn btn-primary" onclick="guardarCambiosGC()">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='control_orden_compra.js') }}"></script>
+{% endblock %}

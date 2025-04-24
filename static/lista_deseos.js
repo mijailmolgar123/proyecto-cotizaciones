@@ -17,19 +17,30 @@ document.addEventListener("DOMContentLoaded", function () {
 // 1. Buscar productos
 function buscarProductos(termino) {
     $.ajax({
-        url: `/productos/buscar?termino=${termino}`,
+        url: `/productos/buscar?termino=${encodeURIComponent(termino)}`,
         method: 'GET',
         success: function(response){
-            let tbody = $('#productos-busqueda-lista');
+            const tbody = $('#productos-busqueda-lista');
             tbody.empty();
-            response.forEach((producto)=>{
-                let row = `
-                <tr>
-                    <td>${producto.id}</td>
-                    <td>${producto.nombre}</td>
-                    <td>${producto.stock}</td>
-                    <td><button class="btn btn-primary" onclick="agregarALista(${producto.id}, '${producto.nombre}', ${producto.stock}, ${producto.precio})">Agregar</button></td>
-                </tr>
+            // response.productos es el array real
+            (response.productos || []).forEach(producto => {
+                const row = `
+                    <tr>
+                        <td>${producto.id}</td>
+                        <td>${producto.nombre}</td>
+                        <td>${producto.stock}</td>
+                        <td>
+                            <button class="btn btn-primary"
+                                onclick="agregarALista(
+                                    ${producto.id},
+                                    '${producto.nombre.replace(/'/g,"\\'")}',
+                                    ${producto.stock},
+                                    ${producto.precio}
+                                )">
+                                Agregar
+                            </button>
+                        </td>
+                    </tr>
                 `;
                 tbody.append(row);
             });

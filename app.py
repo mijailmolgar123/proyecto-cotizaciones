@@ -18,6 +18,7 @@ from sqlalchemy.orm import joinedload
 from flask import Flask, request, jsonify, send_file
 from flask_login import login_required, current_user
 from generate_excel import generate_excel_file
+from datetime import datetime, timezone
 
 app = Flask(__name__)
 
@@ -107,13 +108,11 @@ class Usuario(UserMixin, db.Model):
     nombre_usuario = db.Column(db.String(50), unique=True, nullable=False)
     contraseña_hash = db.Column(db.String(256), nullable=False)
     rol = db.Column(db.String(20), nullable=False)
-    fecha_de_registro = db.Column(db.DateTime, default=datetime.utcnow)
+    fecha_de_registro = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     activo = db.Column(db.Boolean, default=True)
 
     def set_password(self, contraseña):
-
         self.contraseña_hash = generate_password_hash(contraseña)
-
 
     def check_password(self, contraseña):
 
@@ -225,7 +224,7 @@ class Actividad(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
     accion = db.Column(db.String(200), nullable=False)
-    fecha = db.Column(db.DateTime, default=datetime.utcnow)
+    fecha = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
 class GuiaRemision(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -253,7 +252,7 @@ class ListaDeseos(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cliente = db.Column(db.String(100), nullable=False)   # Empresa o nombre del cliente
     ruc = db.Column(db.String(11), nullable=True)
-    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
+    fecha_creacion = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     creado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
     prioridad = db.Column(db.String(20), default='Normal')
     comentario = db.Column(db.Text, nullable=True)
@@ -360,7 +359,7 @@ class GuiaRemisionCompra(db.Model):
     orden_compra_id = db.Column(db.Integer, db.ForeignKey('orden_compra.id'), nullable=False)
     
     numero_guia = db.Column(db.String(100), nullable=False, unique=True)
-    fecha_emision = db.Column(db.DateTime, default=datetime.utcnow)
+    fecha_emision = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     
     estado = db.Column(db.String(20), default='Pendiente')  
     # 'Pendiente', 'Recibido Parcial', 'Recibido Total'
@@ -450,7 +449,13 @@ def cotizaciones_compra_dashboard():
 def orden_compra_dashboard():
     return render_template('orden_compra_dashboard.html')
 
+@app.route('/control_orden_compra')
+@login_required
+def control_orden_compra():
+    return render_template('control_orden_compra.html')
+
 @app.route('/productos', methods=['POST'])
+@login_required
 def crear_producto():
     data = request.get_json()
     
@@ -537,6 +542,7 @@ def obtener_productos():
     })
 
 @app.route('/productos/<int:id>', methods=['GET'])
+@login_required
 def obtener_producto(id):
     producto = Producto.query.filter_by(id=id, activo=True).first()
     if producto is None:
@@ -559,6 +565,7 @@ def obtener_producto(id):
     })
 
 @app.route('/productos/<int:id>', methods=['PUT'])
+@login_required
 def editar_producto(id):
     data = request.get_json()
     producto = db.session.get(Producto, id)
@@ -584,6 +591,7 @@ def editar_producto(id):
         return jsonify({'mensaje': f'Error al guardar los cambios: {str(e)}'}), 500
 
 @app.route('/productos/<int:id>', methods=['DELETE'])
+@login_required
 def desactivar_producto(id):
     producto = db.session.get(Producto, id)
     if producto is None:
@@ -594,111 +602,80 @@ def desactivar_producto(id):
     return jsonify({'mensaje': 'Producto desactivado con éxito'}), 200
 
 @app.route('/productos/buscar', methods=['GET'])
+@login_required
 def buscar_productos():
     """
-    Endpoint con paginación + Full-Text Search (columna 'search_vector').
-    Admite coincidencia parcial usando :* (prefijos).
-    Parámetros:
-      - page (int)
-      - per_page (int)
-      - termino (str)
-    Devuelve:
-      {
-        "productos": [...],
-        "total": int,
-        "paginas": int,
-        "pagina_actual": int
-      }
+    Búsqueda con:
+        • Full-Text Search (columna search_vector, diccionario 'spanish')
+        • Fallback a ILIKE cuando no hay hits FTS
+        • Paginación estilo Flask-SQLAlchemy
+    Parámetros GET:
+        page, per_page, termino
     """
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
-    termino = request.args.get('termino', '', type=str).strip()
+    page        = request.args.get('page', 1,  type=int)
+    per_page    = request.args.get('per_page', 20, type=int)
+    termino_raw = request.args.get('termino', '', type=str).strip()
 
-    offset = (page - 1) * per_page
+    base_query = Producto.query.filter(Producto.activo.is_(True))
 
-    if not termino:
-        # CASO 1: sin término => traer productos activos sin filtro, paginados
-        sql_count = text("""
-            SELECT COUNT(*) AS total
-            FROM producto
-            WHERE activo = TRUE
-        """)
-        total_rows = db.session.execute(sql_count).scalar()
+    # ───────────── BÚSQUEDA ─────────────
+    if termino_raw:
+        # separamos tokens de >2 caracteres
+        tokens = [t.strip() for t in termino_raw.split() if len(t.strip()) > 2]
 
-        sql_data = text("""
-            SELECT *
-            FROM producto
-            WHERE activo = TRUE
-            ORDER BY id
-            LIMIT :limit
-            OFFSET :offset
-        """)
-        rows = db.session.execute(sql_data, {
-            'limit': per_page,
-            'offset': offset
-        }).mappings().all()
-
-    else:
-        # CASO 2: con término => construimos un to_tsquery con :*
-        # p.ej. "cas aca" => "cas:* & aca:*"
-        tokens = termino.split()
         if tokens:
-            tsquery_string = ' & '.join([f"{t.strip()}:*" for t in tokens])
+            # cas:* & aca:* …
+            tsquery = ' & '.join([f"{t}:*" for t in tokens])
+
+            # intento FTS
+            query_fts = base_query.filter(
+                Producto.search_vector.op('@@')(func.to_tsquery('spanish', tsquery))
+            )
+
+            # ¿hubo resultados FTS?
+            if query_fts.count():
+                final_query = query_fts
+            else:  # fallback a ILIKE
+                patron = f"%{termino_raw.lower()}%"
+                final_query = base_query.filter(
+                    func.lower(Producto.nombre).ilike(patron)
+                )
         else:
-            # si hubiera un caso raro de término vacío
-            tsquery_string = ''  # no coincidirá nada
+            # término demasiado corto ➜ directo ILIKE
+            patron = f"%{termino_raw.lower()}%"
+            final_query = base_query.filter(
+                func.lower(Producto.nombre).ilike(patron)
+            )
+    else:
+        final_query = base_query
 
-        # Contar total
-        sql_count = text("""
-            SELECT COUNT(*) AS total
-            FROM producto
-            WHERE activo = TRUE
-              AND search_vector @@ to_tsquery('spanish', :tsquery)
-        """)
-        total_rows = db.session.execute(sql_count, {'tsquery': tsquery_string}).scalar()
+    # ───────────── PAGINACIÓN ────────────
+    productos_paginados = (
+        final_query.order_by(Producto.id.asc())
+                   .paginate(page=page, per_page=per_page, error_out=False)
+    )
 
-        # Obtener datos
-        sql_data = text("""
-            SELECT *
-            FROM producto
-            WHERE activo = TRUE
-              AND search_vector @@ to_tsquery('spanish', :tsquery)
-            ORDER BY id
-            LIMIT :limit
-            OFFSET :offset
-        """)
-        rows = db.session.execute(sql_data, {
-            'tsquery': tsquery_string,
-            'limit': per_page,
-            'offset': offset
-        }).mappings().all()
-
-    # Mapeo a JSON
-    productos = []
-    for row in rows:
-        productos.append({
-            'id': row['id'],
-            'nombre': row['nombre'],
-            'descripcion': row['descripcion'],
-            'precio': row['precio'],
-            'stock': row['stock'],
-            'proveedor': row['proveedor'],
-            'sucursal': row['sucursal'],
-            'almacen': row['almacen'],
-            'codigo_item': row['codigo_item'],
-            'codigo_barra': row['codigo_barra'],
-            'unidad': row['unidad'],
-            'activo': row['activo']
-        })
-
-    # Calcular total de páginas
-    paginas = ceil(total_rows / per_page) if per_page else 1
+    # serializar
+    productos_json = [{
+        'id'          : p.id,
+        'nombre'      : p.nombre,
+        'descripcion' : p.descripcion,
+        'precio'      : p.precio,
+        'stock'       : p.stock,
+        'proveedor'   : p.proveedor,
+        'sucursal'    : p.sucursal,
+        'almacen'     : p.almacen,
+        'codigo_item' : p.codigo_item,
+        'codigo_barra': p.codigo_barra,
+        'unidad'      : p.unidad,
+        'activo'      : p.activo
+    } for p in productos_paginados.items]
 
     return jsonify({
-        'productos': productos,
-        'total': total_rows,
-        'paginas': paginas,
-        'pagina_actual': page
+        'productos'     : productos_json,
+        'total'         : productos_paginados.total,
+        'paginas'       : productos_paginados.pages,
+        'pagina_actual' : productos_paginados.page
     })
 
 @app.route('/guardar_cotizacion', methods=['POST'])
@@ -1879,6 +1856,198 @@ def rechazar_cotizacion_compra(cot_id):
     db.session.commit()
 
     return jsonify({'mensaje': 'Cotización rechazada con éxito'}), 200
+
+# 1) Listar Órdenes de Compra (GET /orden_compra)
+@app.route('/orden_compra', methods=['GET'])
+@login_required
+def listar_ordenes_compra():
+    page      = request.args.get('page', 1, type=int)
+    per_page  = request.args.get('per_page', 20, type=int)
+    proveedor = request.args.get('proveedor', type=str)
+    estado    = request.args.get('estado',   type=str)
+
+    query = OrdenCompra.query
+    if proveedor:
+        query = query.filter(OrdenCompra.proveedor.ilike(f'%{proveedor}%'))
+    if estado:
+        query = query.filter(OrdenCompra.estado == estado)
+
+    pag = query.order_by(OrdenCompra.id.desc())\
+               .paginate(page=page, per_page=per_page, error_out=False)
+
+    ordenes = []
+    for oc in pag.items:
+        usuario = db.session.get(Usuario, oc.creado_por)
+        ordenes.append({
+            'id': oc.id,
+            'cotizacion_compra_id': oc.cotizacion_compra_id,
+            'numero_orden': oc.numero_orden,
+            'fecha_orden': oc.fecha_orden.isoformat(),
+            'proveedor': oc.proveedor,
+            'estado': oc.estado,
+            'creado_por': usuario.nombre_usuario if usuario else 'Desconocido'
+        })
+    return jsonify({
+        'ordenes': ordenes,
+        'pagina_actual': pag.page,
+        'paginas': pag.pages,
+        'total': pag.total
+    })
+
+
+# 2) Detalle de una OC (GET /orden_compra/<id>)
+@app.route('/orden_compra/<int:oc_id>', methods=['GET'])
+@login_required
+def detalle_orden_compra(oc_id):
+    oc = db.session.get(OrdenCompra, oc_id)
+    if not oc:
+        return jsonify({'error':'Orden de compra no encontrada'}),404
+
+    productos = []
+    for p in oc.productos:
+        recibido = db.session.query(
+            func.coalesce(func.sum(ProductoGuiaRemisionCompra.cantidad_recibida),0)
+        ).join(GuiaRemisionCompra,
+               GuiaRemisionCompra.id == ProductoGuiaRemisionCompra.guia_remision_compra_id
+        ).filter(
+            GuiaRemisionCompra.orden_compra_id == oc_id,
+            ProductoGuiaRemisionCompra.producto_orden_compra_id == p.id
+        ).scalar() or 0
+
+        productos.append({
+            'id': p.id,
+            'producto_orden_compra_id': p.id,
+            'cantidad': p.cantidad,
+            'precio_unitario': p.precio_unitario,
+            'cantidad_recibida': recibido
+        })
+
+    return jsonify({
+        'id': oc.id,
+        'numero_orden': oc.numero_orden,
+        'fecha_orden': oc.fecha_orden.isoformat(),
+        'proveedor': oc.proveedor,
+        'estado': oc.estado,
+        'productos': productos
+    })
+
+
+# 3) Listar Guías de Compra de una OC (GET /orden_compra/<id>/guias_remision)
+@app.route('/orden_compra/<int:oc_id>/guias_remision', methods=['GET'])
+@login_required
+def listar_guias_compra(oc_id):
+    guias = GuiaRemisionCompra.query.filter_by(
+        orden_compra_id=oc_id, activo=True
+    ).all()
+    salida = [{
+        'id': g.id,
+        'numero_guia': g.numero_guia,
+        'fecha_emision': g.fecha_emision.isoformat(),
+        'estado': g.estado
+    } for g in guias]
+    return jsonify(salida)
+
+
+# 4) Crear Guía de Compra (POST /orden_compra/<id>/guias_remision)
+@app.route('/orden_compra/<int:oc_id>/guias_remision', methods=['POST'])
+@login_required
+def crear_guia_compra(oc_id):
+    data   = request.get_json() or {}
+    numero = data.get('numero_guia')
+    lines  = data.get('productos', [])
+    if not numero or not lines:
+        return jsonify({'error':'Datos incompletos'}),400
+
+    oc = db.session.get(OrdenCompra, oc_id)
+    if not oc:
+        return jsonify({'error':'OC no encontrada'}),404
+
+    # Validar cantidades
+    for l in lines:
+        poc_id = l['producto_orden_compra_id']
+        nueva  = int(l['cantidad'])
+        poc    = db.session.get(ProductoOrdenCompra, poc_id)
+        if not poc or poc.orden_compra_id != oc_id:
+            return jsonify({'error':f'Producto {poc_id} inválido'}),400
+
+        recibido_prev = db.session.query(
+            func.coalesce(func.sum(ProductoGuiaRemisionCompra.cantidad_recibida),0)
+        ).filter_by(producto_orden_compra_id=poc_id).scalar() or 0
+
+        if recibido_prev + nueva > poc.cantidad:
+            return jsonify({
+                'error': f"No puedes recibir {nueva} (ya lleva {recibido_prev}) "
+                         f"porque ordenaste {poc.cantidad}"
+            }),400
+
+    # Crear cabecera
+    guia = GuiaRemisionCompra(
+        orden_compra_id=oc_id,
+        numero_guia=numero,
+        fecha_emision=datetime.now(timezone.utc),
+        estado='Pendiente'
+    )
+    db.session.add(guia)
+    db.session.flush()
+
+    # Detalles
+    for l in lines:
+        db.session.add(ProductoGuiaRemisionCompra(
+            guia_remision_compra_id=guia.id,
+            producto_orden_compra_id=l['producto_orden_compra_id'],
+            cantidad_recibida=l['cantidad']
+        ))
+    db.session.commit()
+
+    return jsonify({'mensaje':'Guía creada','id':guia.id}),201
+
+# 5) Detalle de una Guía de Compra (GET /guia_remision_compra/<id>)
+@app.route('/guia_remision_compra/<int:gc_id>', methods=['GET'])
+@login_required
+def detalle_guia_compra(gc_id):
+    gc = db.session.get(GuiaRemisionCompra, gc_id)
+    if not gc:
+        return jsonify({'error':'Guía no encontrada'}),404
+
+    productos = [{
+        'producto_orden_compra_id': p.producto_orden_compra_id,
+        'cantidad_recibida': p.cantidad_recibida,
+        'estado': p.estado
+    } for p in gc.productos]
+
+    return jsonify({
+        'id': gc.id,
+        'numero_guia': gc.numero_guia,
+        'fecha_emision': gc.fecha_emision.isoformat(),
+        'estado': gc.estado,
+        'comentario': gc.comentario,
+        'productos': productos
+    })
+
+
+# 6) Actualizar Guía de Compra (PUT /guia_remision_compra/<id>)
+@app.route('/guia_remision_compra/<int:gc_id>', methods=['PUT'])
+@login_required
+def actualizar_guia_compra(gc_id):
+    gc   = db.session.get(GuiaRemisionCompra, gc_id)
+    data = request.get_json() or {}
+    if not gc:
+        return jsonify({'error':'Guía no encontrada'}),404
+
+    gc.estado     = data.get('estado', gc.estado)
+    gc.comentario = data.get('comentario', gc.comentario)
+
+    for d in data.get('detalles', []):
+        pod = ProductoGuiaRemisionCompra.query.filter_by(
+            guia_remision_compra_id=gc_id,
+            producto_orden_compra_id=d['producto_orden_compra_id']
+        ).first()
+        if pod:
+            pod.cantidad_recibida = d['cantidad_recibida']
+
+    db.session.commit()
+    return jsonify({'mensaje':'Guía actualizada'}),200
+
 
 # Crear la tabla si no existe
 with app.app_context():
