@@ -136,11 +136,25 @@ $(document).ready(function() {
                 success: function(response) {
                     alert(response.lista_deseo_info || 'Orden de venta generada exitosamente.');
                     $('#detalleCotizacionModal').modal('hide');
-                    reiniciarYRecargarCotizaciones();
-                    // al éxito de transformar:
-                    if (window.actualizarTablaProductos) { actualizarTablaProductos(); }
+                  
+                    // 2) Obtengo el nuevo estado y determino la clase bootstrap
+                    const nuevoEstado = response.estado;
+                    const claseBadge  = (nuevoEstado === 'Finalizado Total')
+                                       ? 'success'   // verde
+                                       : 'info';     // azul
+                  
+                    // 3) Localizo la fila de la cotización actual
+                    //    Asegúrate de que en cargarCotizaciones le diste un id al <tr>:
+                    //      <tr id="cotizacion-{{id}}"> … </tr>
+                    const $fila = $(`#cotizacion-${window.currentCotizacionId}`);
+                  
+                    // 4) Reemplazo sólo la columna del estado (índice 3)
+                    $fila
+                      .find('td').eq(3)
+                      .html(`<span class="badge badge-${claseBadge}">${nuevoEstado}</span>`);
 
-                },
+                    window.location.reload();
+                  },
                 error: function(xhr, status, error) {
                     console.error('Error al obtener los detalles de la orden de venta:', xhr.responseText);
                     alert("Hubo un error al obtener los detalles de la orden de venta.");
@@ -163,7 +177,7 @@ $(document).ready(function() {
             success: function(response) {
                 alert('Cotización rechazada correctamente.');
                 $('#detalleCotizacionModal').modal('hide');
-                reiniciarYRecargarCotizaciones();
+                window.location.reload();
             },
             error: function(error) {
                 alert('Hubo un problema al rechazar la cotización.');

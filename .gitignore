@@ -8,3 +8,6 @@ index.html
 static/uploads/
 depuracion.py
 .env
+import_inventory.py
+purge_db.py
+CONTROL DE STOCK.xlsm

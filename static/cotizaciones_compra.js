@@ -76,12 +76,12 @@ function renderCotizacionItems(){
         <tr id="fila-${index}">
             <td>${item.nombre_producto}</td>
             <td>
-                <input type="number" step="0.01" class="form-control" min="0.01"
-                     value="${item.precio_ofrecido}" onchange="cambiarPrecio(${index}, this.value)">
-            </td>
-            <td>
                 <input type="number" class="form-control" value="${item.cantidad}"
                        onchange="cambiarCantidad(${index}, this.value)">
+            </td>
+            <td>
+                <input type="number" step="0.01" class="form-control" min="0.01"
+                     value="${item.precio_ofrecido}" onchange="cambiarPrecio(${index}, this.value)">
             </td>
             <td>
                 <button class="btn btn-danger" onclick="eliminarItemCotizacion(${index})">Eliminar</button>

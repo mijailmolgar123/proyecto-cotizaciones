@@ -19,6 +19,7 @@ from flask import Flask, request, jsonify, send_file
 from flask_login import login_required, current_user
 from generate_excel import generate_excel_file
 from datetime import datetime, timezone
+import uuid
 
 app = Flask(__name__)
 
@@ -72,9 +73,8 @@ def create_app():
         os.makedirs(os.path.join(basedir, 'instance'))
     
     # Intenta obtener la URI de la base de datos desde AWS Secrets Manager
-    # db_uri = get_secret()
-    db_uri = "postgresql+psycopg2://postgres:HQX4meI4pYJGGxP2WL7w@proyecto-cotizaciones-db.c09o2u6em92b.us-east-1.rds.amazonaws.com:5432/proyecto_cotizaciones"
-
+    db_uri = get_secret()
+   
     # Si no se pudo obtener el secreto, usa una variable de entorno local como fallback
     if not db_uri:
         db_uri = os.getenv('DATABASE_URI', 'fallback') 
@@ -458,6 +458,7 @@ def control_orden_compra():
 @login_required
 def crear_producto():
     data = request.get_json()
+    codigo = data.get('codigo_item') or f"PRE-{uuid.uuid4().hex[:8]}"
     
     nuevo_producto = Producto(
         nombre=data['nombre'],
@@ -467,7 +468,7 @@ def crear_producto():
         proveedor=data.get('proveedor', ''),
         sucursal=data.get('sucursal', ''),
         almacen=data.get('almacen', ''),
-        codigo_item=data.get('codigo_item', ''),
+        codigo_item=codigo,
         codigo_barra=data.get('codigo_barra', ''),
         unidad=data.get('unidad', 'UND'),
         creado_por=current_user.id,
@@ -725,6 +726,29 @@ def guardar_cotizacion():
         "mensaje": "Cotización guardada con éxito"
     }), 201
 
+@app.route('/productos/<int:id>', methods=['PUT'])
+@login_required
+def actualizar_precio_producto(id):
+    data = request.get_json()
+    if 'precio' not in data:
+        return jsonify({'error':'Falta campo "precio"'}), 400
+
+    producto = db.session.get(Producto, id)
+    if not producto:
+        return jsonify({'error':'Producto no encontrado'}), 404
+
+    try:
+        producto.precio = float(data['precio'])
+        db.session.commit()
+        return jsonify({
+            'mensaje': 'Precio actualizado con éxito',
+            'id': producto.id,
+            'precio': producto.precio
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error':'Error actualizando precio'}), 500
+    
 @app.route('/descargar_excel/<int:cot_id>', methods=['GET'])
 @login_required
 def descargar_excel(cot_id):
@@ -941,44 +965,16 @@ def transformar_orden_venta(cotizacion_id):
                 db.session.add(producto_orden)
                 prod_obj.stock -= cantidad_deseada
 
-    # Crear lista de deseos si hay faltantes
-    """
-    mensaje_lista_deseo = "No fue necesario generar una Lista de Deseos."
-    if productos_faltantes:
-        nueva_lista = ListaDeseos(
-            cliente=cotizacion.cliente,
-            ruc=cotizacion.ruc,
-            creado_por=current_user.id,
-            prioridad='Alta',
-            comentario=f'Generada automáticamente desde cotización {cotizacion.id}'
-        )
-        db.session.add(nueva_lista)
-        db.session.flush()  # Obtener ID antes del commit
-
-        for item in productos_faltantes:
-            item_deseo = ItemDeseo(
-                lista_deseos_id=nueva_lista.id,
-                producto_id=item['producto'].id,
-                cantidad_necesaria=item['cantidad_faltante'],
-                precio_referencia=item['producto'].precio or 0.0,
-                estado_item='Pendiente'
-            )
-            db.session.add(item_deseo)
-
-        mensaje_lista_deseo = (
-            f"Se generó una Lista de Deseos con los siguientes productos:\n" +
-            "\n".join(f"- {item['producto'].nombre} (faltan {item['cantidad_faltante']} unidades)"
-                      for item in productos_faltantes)
-        )
-
-    cotizacion.estado = 'Finalizado Total' if total_productos_seleccionados == total_productos_cotizacion else 'Finalizado Parcial'
-    """
-    db.session.commit()
-
-    return jsonify({
-        'mensaje': 'Orden de Venta generada correctamente.',
-        #'lista_deseo_info': mensaje_lista_deseo
-    }), 200
+        if total_productos_seleccionados >= total_productos_cotizacion:
+            cotizacion.estado = 'Finalizado Total'
+        else:
+            cotizacion.estado = 'Finalizado Parcial'
+        db.session.commit()
+        
+        return jsonify({
+            'mensaje': 'Orden de Venta generada correctamente.',
+            'estado': cotizacion.estado
+        }), 200
 
 @app.route('/rechazar_cotizacion/<int:cotizacion_id>', methods=['POST'])
 @login_required
@@ -1894,7 +1890,6 @@ def listar_ordenes_compra():
         'total': pag.total
     })
 
-
 # 2) Detalle de una OC (GET /orden_compra/<id>)
 @app.route('/orden_compra/<int:oc_id>', methods=['GET'])
 @login_required
@@ -1931,7 +1926,6 @@ def detalle_orden_compra(oc_id):
         'productos': productos
     })
 
-
 # 3) Listar Guías de Compra de una OC (GET /orden_compra/<id>/guias_remision)
 @app.route('/orden_compra/<int:oc_id>/guias_remision', methods=['GET'])
 @login_required
@@ -1946,7 +1940,6 @@ def listar_guias_compra(oc_id):
         'estado': g.estado
     } for g in guias]
     return jsonify(salida)
-
 
 # 4) Crear Guía de Compra (POST /orden_compra/<id>/guias_remision)
 @app.route('/orden_compra/<int:oc_id>/guias_remision', methods=['POST'])
@@ -2024,7 +2017,6 @@ def detalle_guia_compra(gc_id):
         'productos': productos
     })
 
-
 # 6) Actualizar Guía de Compra (PUT /guia_remision_compra/<id>)
 @app.route('/guia_remision_compra/<int:gc_id>', methods=['PUT'])
 @login_required
@@ -2047,7 +2039,6 @@ def actualizar_guia_compra(gc_id):
 
     db.session.commit()
     return jsonify({'mensaje':'Guía actualizada'}),200
-
 
 # Crear la tabla si no existe
 with app.app_context():

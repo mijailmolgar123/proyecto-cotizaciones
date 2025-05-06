@@ -99,7 +99,16 @@ window.agregarAOrden = function (id) {
               <option value="pedido">Pedido</option>
             </select>
           </td>
-          <td><button class="btn btn-danger" onclick="eliminarDeOrden(${p.id})">Eliminar</button></td>
+          <td>
+            <button
+              class="btn btn-sm btn-secondary"
+              onclick="mostrarModalEditarPrecio(${p.id})"
+            >Editar</button>
+            <button
+              class="btn btn-sm btn-danger"
+              onclick="eliminarDeOrden(${p.id})"
+            >Eliminar</button>
+          </td>
         </tr>`);
 
       recalcFila(p.id);
@@ -210,7 +219,7 @@ function guardarCotizacion() {
         success: function(response) {
             alert(response.mensaje);
             $('#modalCotizacion').modal('hide');
-            location.reload();
+            limpiarTablaYTotales();
             window.location = "/descargar_excel/" + response.id;
         },
         error: function(xhr, status, error) {
@@ -218,6 +227,17 @@ function guardarCotizacion() {
             alert('Hubo un error al guardar la cotización.');
         }
     });
+}
+
+function limpiarTablaYTotales() {
+  // Vacía todas las filas del detalle
+  $('#tblDetalle tbody').empty();
+  
+  // Reinicia tu array local si lo usas para acumular productos
+  productosEnOrden = [];
+
+  // Recalcula totales (o fija a 0 manualmente)
+  recalcTotales();  // asume que esta función pone 0 en todos los totales si no hay filas
 }
 
 function obtenerProductosDeCotizacion() {
@@ -301,5 +321,45 @@ $('#generar-cotizacion').on('click', function () {
       return;
     }
     $('#modalCotizacion').modal('show');      // ya tienes el modal en la vista
+  });
+
+  let productoAEditar = null;
+
+  // 1) Abre el modal y precarga el precio actual
+  window.mostrarModalEditarPrecio = function(id) {
+    productoAEditar = id;
+    const $fila = $(`#producto-${id}`);
+    const precioActual = parseFloat($fila.data('precio-soles')) || 0;
+    $('#input-nuevo-precio').val(precioActual.toFixed(2));
+    $('#modalEditarPrecio').modal('show');
+  };
+  
+  // 2) Al hacer clic en “Guardar”
+  $('#btn-guardar-precio').on('click', function() {
+    const nuevoPrecio = parseFloat($('#input-nuevo-precio').val());
+    if (isNaN(nuevoPrecio) || nuevoPrecio < 0) {
+      return alert('Ingresa un precio válido.');
+    }
+  
+    // 3) Llamada AJAX al backend
+    $.ajax({
+      url: `/productos/${productoAEditar}`,   // veremos el endpoint en el back
+      method: 'PUT',
+      contentType: 'application/json',
+      data: JSON.stringify({ precio: nuevoPrecio }),
+      success: () => {
+        // 4) Actualizo el DOM sin recargar:
+        const $fila = $(`#producto-${productoAEditar}`);
+        $fila.data('precio-soles', nuevoPrecio);
+        $fila.find('.precio-soles').text(nuevoPrecio.toFixed(2));
+        recalcFila(productoAEditar);
+        recalcTotales();
+        $('#modalEditarPrecio').modal('hide');
+      },
+      error: (xhr, status, err) => {
+        console.error('Error al actualizar precio:', err);
+        alert('No se pudo actualizar el precio en el servidor.');
+      }
+    });
   });
   
