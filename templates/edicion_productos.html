@@ -43,6 +43,65 @@
     </div>
     
 </div>
+<!-- ========================================= -->
+<!-- Modal para Editar Producto (Ventana Emergente) -->
+<!-- ========================================= -->
+<div
+  class="modal fade"
+  id="editarProductoModal"
+  tabindex="-1"
+  role="dialog"
+  aria-labelledby="editarProductoModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      
+      <!-- Cabecera del modal -->
+      <div class="modal-header">
+        <h5 class="modal-title" id="editarProductoModalLabel">
+          Editar Producto
+        </h5>
+        <button
+          type="button"
+          class="close"
+          data-dismiss="modal"
+          aria-label="Cerrar"
+        >
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      
+      <!-- Cuerpo del modal: aquí se inyectará el formulario -->
+      <div class="modal-body">
+        <div id="modal-editar-form-container">
+          <!-- El formulario se cargará aquí dinámicamente desde JS -->
+        </div>
+      </div>
+      
+      <!-- Pie del modal: botón Cancelar y Guardar Cambios -->
+      <div class="modal-footer">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          data-dismiss="modal"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          class="btn btn-primary"
+          id="btn-guardar-cambios"
+          form="form-editar-producto"
+        >
+          Guardar Cambios
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 {% endblock %}
 
 {% block scripts %}

@@ -78,18 +78,21 @@ window.agregarAOrden = function (id) {
     method: 'GET',
     success: p => {
       const precioSinIGVSoles = (p.precio / 1.18).toFixed(2); // sin IGV, soles
+      const precioFloat = parseFloat(p.precio) || 0;
+      const precioCon2Decimales = precioFloat.toFixed(2);
       $tblDetalle.append(`
-        <tr id="producto-${p.id}" data-precio-soles="${p.precio}">
+        <tr id="producto-${p.id}" data-precio-soles="${precioCon2Decimales}">
           <td>${p.id}</td>
           <td>${p.nombre}</td>
           <td>${p.stock}</td>
+          <td>${p.unidad}</td> 
 
           <td><input type="number" class="form-control cant-necesaria" value="1" min="1"></td>
-          <td class="precio-soles">${p.precio}</td>
+          <td class="precio-soles">${precioCon2Decimales}</td>
 
           <td><input type="number" class="form-control margen" value="0" min="0"></td>
           <td class="precio-unit-sin-igv">${precioSinIGVSoles}</td>
-          <td class="precio-total">${p.precio}</td>
+          <td class="precio-total">${precioCon2Decimales}</td>
           <td class="precio-total-sin-igv">${precioSinIGVSoles}</td>
 
           <td>

@@ -32,17 +32,35 @@ $(document).ready(function () {
                 response.productos.forEach(producto => {
                     let row = '<tr>';
                     columnasVisibles.forEach(columna => {
-                        row += `<td>${producto[columna]}</td>`;
+                        let valor = producto[columna];
+
+                        // Si estamos en la columna “precio”, forzamos dos decimales:
+                        if (columna === 'precio') {
+                            // Asegurar que sea número; si viene como string, convertirlo
+                            let num = parseFloat(producto.precio);
+                            // Si no es un número válido, dejamos “0.00”
+                            if (isNaN(num)) {
+                                valor = '0.00';
+                            } else {
+                                valor = num.toFixed(2);
+                            }
+                        }
+
+                        row += `<td>${valor}</td>`;
                     });
                     row += `
                         <td>
-                            <button class="btn btn-warning" onclick="mostrarFormularioEditar(${producto.id})">Editar</button>
-                            <button class="btn btn-danger"  onclick="eliminarProducto(${producto.id})">Eliminar</button>
+                            <button class="btn btn-warning" onclick="mostrarFormularioEditar(${producto.id})">
+                                Editar
+                            </button>
+                            <button class="btn btn-danger" onclick="eliminarProducto(${producto.id})">
+                                Eliminar
+                            </button>
                         </td>
                     </tr>`;
                     tbody.append(row);
                 });
-
+                
                 paginaActual = response.pagina_actual;
                 totalPaginas = response.paginas;
 
@@ -213,81 +231,166 @@ function cerrarFormularioAgregar() {
 
     // Función para mostrar el formulario de edición
 function mostrarFormularioEditar(id) {
-    // Realizar una solicitud AJAX para obtener los datos del producto
-    $.ajax({
-        url: `/productos/${id}`,
-        method: 'GET',
-        success: function(producto) {
-            // Generar el formulario de edición con los datos del producto
-            let form = `
-                <div class="card p-3">
-                    <form id="form-editar-producto">
-                        <div class="form-group">
-                            <label for="nombre">Nombre:</label>
-                            <input type="text" class="form-control" id="nombre" value="${producto.nombre}" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="descripcion">Descripción:</label>
-                            <input type="text" class="form-control" id="descripcion" value="${producto.descripcion}" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="precio">Precio:</label>
-                            <input type="number" class="form-control" id="precio" value="${producto.precio}" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="stock">Stock:</label>
-                            <input type="number" class="form-control" id="stock" value="${producto.stock}" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="proveedor">Proveedor:</label>
-                            <input type="text" class="form-control" id="proveedor" value="${producto.proveedor}" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="sucursal">Sucursal:</label>
-                            <input type="text" class="form-control" id="sucursal" value="${producto.sucursal}" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="almacen">Almacén:</label>
-                            <input type="text" class="form-control" id="almacen" value="${producto.almacen}" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="codigo_item">Código Item:</label>
-                            <input type="text" class="form-control" id="codigo_item" value="${producto.codigo_item}" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="codigo_barra">Código Barra:</label>
-                            <input type="text" class="form-control" id="codigo_barra" value="${producto.codigo_barra}" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="unidad">Unidad:</label>
-                            <input type="text" class="form-control" id="unidad" value="${producto.unidad}" required>
-                        </div>
-                        <div class="d-flex justify-content-between mt-3">
-                            <button type="submit" class="btn btn-primary">Guardar Cambios</button>
-                            <button type="button" class="btn btn-secondary" onclick="cerrarFormularioEdicion()">Cancelar</button>
-                        </div>
-                    </form>
-                </div>
-            `;
-            // Insertar el formulario en el contenedor correspondiente
-            $('#formulario-editar-container').html(form);
+  $.ajax({
+    url: `/productos/${id}`,
+    method: 'GET',
+    success: function(producto) {
+      // 1) Formatear el precio con dos decimales
+      let numPrecio = parseFloat(producto.precio);
+      if (isNaN(numPrecio)) {
+        numPrecio = 0;
+      }
+      let precioFormateado = numPrecio.toFixed(2);
 
-            // Manejar el envío del formulario de edición
-            $('#form-editar-producto').on('submit', function(event) {
-                event.preventDefault();
-                editarProducto(id);
-            });
-        },
-        error: function(jqXHR, textStatus, errorThrown) {
-            console.error('Error al obtener los datos del producto:', textStatus, errorThrown);
-            alert('Hubo un error al obtener los datos del producto. Por favor, intenta nuevamente.');
-        }
-    });
-}
+      // 2) Construir el HTML del formulario con todos los campos
+      //    Importante: el <form> debe tener id="form-editar-producto"
+      let formHtml = `
+        <form id="form-editar-producto">
+          <!-- Nombre -->
+          <div class="form-group">
+            <label for="nombre">Nombre:</label>
+            <input
+              type="text"
+              class="form-control"
+              id="nombre"
+              name="nombre"
+              value="${producto.nombre}"
+              required
+            >
+          </div>
 
-// Función para cerrar el formulario de edición
-function cerrarFormularioEdicion() {
-    $('#formulario-editar-container').html(""); // Limpia el formulario y lo oculta
+          <!-- Descripción -->
+          <div class="form-group">
+            <label for="descripcion">Descripción:</label>
+            <input
+              type="text"
+              class="form-control"
+              id="descripcion"
+              name="descripcion"
+              value="${producto.descripcion || ''}"
+            >
+          </div>
+
+          <!-- Precio -->
+          <div class="form-group">
+            <label for="precio">Precio:</label>
+            <input
+              type="number"
+              class="form-control"
+              id="precio"
+              name="precio"
+              value="${precioFormateado}"
+              step="0.01"
+              required
+            >
+          </div>
+
+          <!-- Stock -->
+          <div class="form-group">
+            <label for="stock">Stock:</label>
+            <input
+              type="number"
+              class="form-control"
+              id="stock"
+              name="stock"
+              value="${producto.stock}"
+              min="0"
+              required
+            >
+          </div>
+
+          <!-- Proveedor -->
+          <div class="form-group">
+            <label for="proveedor">Proveedor:</label>
+            <input
+              type="text"
+              class="form-control"
+              id="proveedor"
+              name="proveedor"
+              value="${producto.proveedor || ''}"
+            >
+          </div>
+
+          <!-- Sucursal -->
+          <div class="form-group">
+            <label for="sucursal">Sucursal:</label>
+            <input
+              type="text"
+              class="form-control"
+              id="sucursal"
+              name="sucursal"
+              value="${producto.sucursal || ''}"
+            >
+          </div>
+
+          <!-- Almacén -->
+          <div class="form-group">
+            <label for="almacen">Almacén:</label>
+            <input
+              type="text"
+              class="form-control"
+              id="almacen"
+              name="almacen"
+              value="${producto.almacen || ''}"
+            >
+          </div>
+
+          <!-- Código Item -->
+          <div class="form-group">
+            <label for="codigo_item">Código Item:</label>
+            <input
+              type="text"
+              class="form-control"
+              id="codigo_item"
+              name="codigo_item"
+              value="${producto.codigo_item || ''}"
+            >
+          </div>
+
+          <!-- Código Barra -->
+          <div class="form-group">
+            <label for="codigo_barra">Código Barra:</label>
+            <input
+              type="text"
+              class="form-control"
+              id="codigo_barra"
+              name="codigo_barra"
+              value="${producto.codigo_barra || ''}"
+            >
+          </div>
+
+          <!-- Unidad -->
+          <div class="form-group">
+            <label for="unidad">Unidad:</label>
+            <input
+              type="text"
+              class="form-control"
+              id="unidad"
+              name="unidad"
+              value="${producto.unidad || ''}"
+              required
+            >
+          </div>
+
+          <!-- Agrega aquí más campos si tu modelo los tiene -->
+        </form>`;
+
+      // 3) Inyectar el formulario dentro del contenedor del modal
+      $('#modal-editar-form-container').html(formHtml);
+
+      // 4) Asociar el listener al evento submit del formulario
+      $('#form-editar-producto').on('submit', function(event) {
+        event.preventDefault();
+        editarProducto(id);
+      });
+
+      // 5) Mostrar el modal de Bootstrap
+      $('#editarProductoModal').modal('show');
+    },
+    error: function() {
+      alert('Error al obtener los datos del producto.');
+    }
+  });
 }
 
 // Función para enviar los datos actualizados del producto
@@ -312,8 +415,8 @@ function editarProducto(id) {
         data: JSON.stringify(producto),
         success: function(response) {
             alert('Producto actualizado con éxito');
+            $('#editarProductoModal').modal('hide');
             setTimeout(() => {
-                cerrarFormularioEdicion();
                 resetearYCargarPrimeraPagina();
             }, 100);
         },        

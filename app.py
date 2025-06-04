@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import boto3
 import json
-from sqlalchemy import func, text
+from sqlalchemy import func, text, or_
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from math import ceil
 from sqlalchemy.orm import joinedload
@@ -73,8 +73,9 @@ def create_app():
         os.makedirs(os.path.join(basedir, 'instance'))
     
     # Intenta obtener la URI de la base de datos desde AWS Secrets Manager
-    db_uri = get_secret()
-   
+    # db_uri = get_secret()
+    db_uri = "postgresql+psycopg2://postgres:HQX4meI4pYJGGxP2WL7w@proyecto-cotizaciones-db.c09o2u6em92b.us-east-1.rds.amazonaws.com:5432/proyecto_cotizaciones"
+
     # Si no se pudo obtener el secreto, usa una variable de entorno local como fallback
     if not db_uri:
         db_uri = os.getenv('DATABASE_URI', 'fallback') 
@@ -493,48 +494,70 @@ def obtener_productos():
     per_page    = request.args.get('per_page', 20, type=int)
     termino_raw = request.args.get('termino', '', type=str).strip()
 
+    # 1) Base de la consulta: sólo productos activos
     query = Producto.query.filter(Producto.activo.is_(True))
 
-    # ──────────────── BÚSQUEDA ──────────────────────────────
+    # 2) Si hay término de búsqueda, intentamos Full‐Text Search sobre nombre
     if termino_raw:
+        # Separamos en tokens de al menos 3 caracteres
         tokens = [t.strip() for t in termino_raw.split() if len(t.strip()) > 2]
 
         if tokens:
+            # Armar tsquery tipo: 'token1:* & token2:* & ...'
             tsquery = ' & '.join([f"{t}:*" for t in tokens])
+            # Intento con search_vector sobre nombre
             query_fts = query.filter(
                 Producto.search_vector.op('@@')(func.to_tsquery('spanish', tsquery))
             )
 
+            # Si FTS NO devolvió nada, caemos a ILIKE sobre nombre, código o código de barras
             if query_fts.count() == 0:
                 patron = f"%{termino_raw.lower()}%"
-                query = query.filter(func.lower(Producto.nombre).ilike(patron))
+                query = query.filter(
+                    or_(
+                        func.lower(Producto.nombre).ilike(patron),
+                        func.lower(Producto.codigo_item).ilike(patron),
+                        func.lower(Producto.codigo_barra).ilike(patron)
+                    )
+                )
             else:
+                # Si sí devolvió resultados FTS, seguimos con ellos
                 query = query_fts
+
         else:
+            # Si no hay tokens “largo” (p.ej. usuario tipea 1 o 2 letras), hacer ILIKE directo
             patron = f"%{termino_raw.lower()}%"
-            query = query.filter(func.lower(Producto.nombre).ilike(patron))
+            query = query.filter(
+                or_(
+                    func.lower(Producto.nombre).ilike(patron),
+                    func.lower(Producto.codigo_item).ilike(patron),
+                    func.lower(Producto.codigo_barra).ilike(patron)
+                )
+            )
 
-    # ──────────────── PAGINACIÓN ────────────────────────────
-    productos_paginados = (
-        query.order_by(Producto.id.asc())
-             .paginate(page=page, per_page=per_page, error_out=False)
-    )
+    # 3) Ordenar por ID ascendente (o cambia el campo si prefieres otro orden)
+    query = query.order_by(Producto.id.asc())
 
+    # 4) Aplicar paginación
+    productos_paginados = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # 5) Serializar al formato JSON que tu front‐end espera
     productos_json = [{
-        'id'          : p.id,
-        'nombre'      : p.nombre,
-        'descripcion' : p.descripcion,
-        'precio'      : p.precio,
-        'stock'       : p.stock,
-        'proveedor'   : p.proveedor,
-        'sucursal'    : p.sucursal,
-        'almacen'     : p.almacen,
-        'codigo_item' : p.codigo_item,
-        'codigo_barra': p.codigo_barra,
-        'unidad'      : p.unidad,
-        'activo'      : p.activo
+        'id'           : p.id,
+        'nombre'       : p.nombre,
+        'descripcion'  : p.descripcion,
+        'precio'       : p.precio,
+        'stock'        : p.stock,
+        'proveedor'    : p.proveedor,
+        'sucursal'     : p.sucursal,
+        'almacen'      : p.almacen,
+        'codigo_item'  : p.codigo_item,
+        'codigo_barra' : p.codigo_barra,
+        'unidad'       : p.unidad,
+        'activo'       : p.activo
     } for p in productos_paginados.items]
 
+    # 6) Devolver JSON con productos + info de paginación
     return jsonify({
         'productos'     : productos_json,
         'total'         : productos_paginados.total,
