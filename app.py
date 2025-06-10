@@ -74,7 +74,10 @@ def create_app():
     
     # Intenta obtener la URI de la base de datos desde AWS Secrets Manager
     # db_uri = get_secret()
-    db_uri = "postgresql+psycopg2://postgres:HQX4meI4pYJGGxP2WL7w@proyecto-cotizaciones-db.c09o2u6em92b.us-east-1.rds.amazonaws.com:5432/proyecto_cotizaciones"
+    #real
+    #db_uri = "postgresql+psycopg2://postgres:HQX4meI4pYJGGxP2WL7w@proyecto-cotizaciones-db.c09o2u6em92b.us-east-1.rds.amazonaws.com:5432/proyecto_cotizaciones"
+    #
+    db_uri = "postgresql+psycopg2://postgres:Mijail28++@proyecto-cotizaciones-staging.c09o2u6em92b.us-east-1.rds.amazonaws.com:5432/proyecto_cotizaciones"
 
     # Si no se pudo obtener el secreto, usa una variable de entorno local como fallback
     if not db_uri:
@@ -119,6 +122,35 @@ class Usuario(UserMixin, db.Model):
 
         return check_password_hash(self.contraseña_hash, contraseña)
 
+class Cliente(db.Model):
+    __tablename__ = 'cliente'
+    id      = db.Column(db.Integer, primary_key=True)
+    nombre  = db.Column(db.String(100), nullable=False, unique=True)
+    ruc     = db.Column(db.String(11),   nullable=False, unique=True)
+    # (otros campos opcionales que quieras guardar: dirección, ciudad, etc.)
+    activo  = db.Column(db.Boolean, default=True)
+
+    # Para relación “1 cliente → varios contactos” (opcional)
+    contactos = db.relationship('Contacto', backref='cliente', lazy=True)
+
+
+class Contacto(db.Model):
+    __tablename__ = 'contacto'
+    id           = db.Column(db.Integer, primary_key=True)
+    cliente_id   = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=False)
+    solicitante  = db.Column(db.String(100), nullable=False)
+    email        = db.Column(db.String(100), nullable=False)
+    referencia   = db.Column(db.String(100), nullable=True)
+    celular      = db.Column(db.String(15),  nullable=True)
+    activo       = db.Column(db.Boolean, default=True)
+
+class Proveedor(db.Model):
+    __tablename__ = 'proveedor'
+    id      = db.Column(db.Integer, primary_key=True)
+    nombre  = db.Column(db.String(100), nullable=False, unique=True)
+    ruc     = db.Column(db.String(11),   nullable=False, unique=True)
+    activo  = db.Column(db.Boolean, default=True)
+
 class Producto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(80), nullable=False)
@@ -140,13 +172,12 @@ class Producto(db.Model):
     search_vector = db.Column(TSVECTOR)
 
 class Cotizacion(db.Model):
+    __tablename__ = 'cotizacion'
     id = db.Column(db.Integer, primary_key=True)
-    cliente = db.Column(db.String(100), nullable=False)
-    solicitante = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(100), nullable=False)
-    referencia = db.Column(db.String(100), nullable=False)
-    ruc = db.Column(db.String(11), nullable=False)
-    celular = db.Column(db.String(15))
+    cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=False)
+    cliente = db.relationship('Cliente', backref='cotizaciones')
+    contacto_id = db.Column(db.Integer, db.ForeignKey('contacto.id'), nullable=True)
+    contacto = db.relationship('Contacto', backref='cotizaciones')
     fecha = db.Column(db.String(10), nullable=False)
     total = db.Column(db.Float, nullable=False)
     estado = db.Column(db.String(20), nullable=False, default='Pendiente')
@@ -162,6 +193,7 @@ class Cotizacion(db.Model):
     valor_cambio = db.Column(db.Float, nullable=False, default=1.0)
 
 class ProductoCotizacion(db.Model):
+    __tablename__ = 'producto_cotizacion'
     id = db.Column(db.Integer, primary_key=True)
     cotizacion_id = db.Column(db.Integer, db.ForeignKey('cotizacion.id'), nullable=False)
     producto_id = db.Column(db.Integer, db.ForeignKey('producto.id'), nullable=False)
@@ -173,13 +205,12 @@ class ProductoCotizacion(db.Model):
     activo = db.Column(db.Boolean, default=True)
 
 class OrdenVenta(db.Model):
+    __tablename__ = 'orden_venta'
     id = db.Column(db.Integer, primary_key=True)
-    cliente = db.Column(db.String(100), nullable=False)
-    solicitante = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(100), nullable=False)
-    referencia = db.Column(db.String(100), nullable=False)
-    ruc = db.Column(db.String(11), nullable=False)
-    celular = db.Column(db.String(15))
+    cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=False)
+    cliente = db.relationship('Cliente', backref='ordenes_venta')
+    contacto_id = db.Column(db.Integer, db.ForeignKey('contacto.id'), nullable=True)
+    contacto = db.relationship('Contacto', backref='ordenes_venta')
     fecha = db.Column(db.String(10), nullable=False)
     total = db.Column(db.Float, nullable=False)
     estado = db.Column(db.String(20), nullable=False, default='Pendiente')
@@ -196,6 +227,7 @@ class OrdenVenta(db.Model):
     creador = db.relationship('Usuario', backref='ordenes_creadas', lazy=True)
 
 class ProductoOrden(db.Model):
+    __tablename__ = 'producto_orden'
     id = db.Column(db.Integer, primary_key=True)
     orden_id = db.Column(db.Integer, db.ForeignKey('orden_venta.id'), nullable=False)
     producto_id = db.Column(db.Integer, db.ForeignKey('producto.id'), nullable=False)
@@ -208,6 +240,7 @@ class ProductoOrden(db.Model):
     activo = db.Column(db.Boolean, default=True)
 
 class SeguimientoOrden(db.Model):
+    __tablename__ = 'seguimiento_orden'
     id = db.Column(db.Integer, primary_key=True)
     orden_id = db.Column(db.Integer, db.ForeignKey('orden_venta.id'), nullable=False)
     fecha = db.Column(db.String(10), nullable=False)
@@ -215,6 +248,7 @@ class SeguimientoOrden(db.Model):
     comentario = db.Column(db.String(200), nullable=True)
 
 class SeguimientoProducto(db.Model):
+    __tablename__ = 'seguimiento_producto'
     id = db.Column(db.Integer, primary_key=True)
     producto_orden_id = db.Column(db.Integer, db.ForeignKey('producto_orden.id'), nullable=False)
     fecha = db.Column(db.String(10), nullable=False)
@@ -222,12 +256,14 @@ class SeguimientoProducto(db.Model):
     comentario = db.Column(db.String(200), nullable=True)
 
 class Actividad(db.Model):
+    __tablename__ = 'actividad'
     id = db.Column(db.Integer, primary_key=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
     accion = db.Column(db.String(200), nullable=False)
     fecha = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
 class GuiaRemision(db.Model):
+    __tablename__ = 'guia_remision'
     id = db.Column(db.Integer, primary_key=True)
     numero_guia = db.Column(db.String(100), nullable=False, unique=True)
     orden_venta_id = db.Column(db.Integer, db.ForeignKey('orden_venta.id'), nullable=False)
@@ -239,6 +275,7 @@ class GuiaRemision(db.Model):
     imagen_url = db.Column(db.String(255), nullable=True)  # Ruta de la imagen opcional
 
 class ProductoGuiaRemision(db.Model):
+    __tablename__ = 'producto_guia_remision'
     id = db.Column(db.Integer, primary_key=True)
     guia_remision_id = db.Column(db.Integer, db.ForeignKey('guia_remision.id', ondelete='CASCADE'), nullable=False)
     producto_orden_id = db.Column(db.Integer, db.ForeignKey('producto_orden.id'), nullable=False)  # Nueva relación
@@ -249,10 +286,9 @@ class ProductoGuiaRemision(db.Model):
 
 class ListaDeseos(db.Model):
     __tablename__ = 'lista_deseos'
-
     id = db.Column(db.Integer, primary_key=True)
-    cliente = db.Column(db.String(100), nullable=False)   # Empresa o nombre del cliente
-    ruc = db.Column(db.String(11), nullable=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=False)
+    cliente = db.relationship('Cliente', backref='listas_deseos')  
     fecha_creacion = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     creado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
     prioridad = db.Column(db.String(20), default='Normal')
@@ -268,28 +304,19 @@ class ItemDeseo(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     lista_deseos_id = db.Column(db.Integer, db.ForeignKey('lista_deseos.id'), nullable=False)
-
-    # Si existe 'producto_id', usaremos su nombre real. 
     producto_id = db.Column(db.Integer, db.ForeignKey('producto.id'), nullable=True)
-    
-    # En caso de pre-producto
     nombre_preproducto = db.Column(db.String(150), nullable=True)
-
     cantidad_necesaria = db.Column(db.Integer, default=1)
     precio_referencia = db.Column(db.Float, default=0.0)
-    
     estado_item = db.Column(db.String(20), default='Pendiente') 
-    # Podrías usar: 'Pendiente', 'Cotizado', 'Descartado', etc.
-
-    # Relación opcional para el producto
     producto = db.relationship('Producto', lazy=True)
 
 class CotizacionCompra(db.Model):
     __tablename__ = 'cotizacion_compra'
 
     id = db.Column(db.Integer, primary_key=True)
-    proveedor = db.Column(db.String(100), nullable=False)
-    ruc_proveedor = db.Column(db.String(15), nullable=True)
+    proveedor_id = db.Column(db.Integer, db.ForeignKey('proveedor.id'), nullable=False)
+    proveedor = db.relationship('Proveedor', backref='cotizaciones_compra')
     forma_pago = db.Column(db.String(100), nullable=True)
     fecha_oferta = db.Column(db.Date, nullable=True)
     validez_dias = db.Column(db.Integer, nullable=True)
@@ -325,17 +352,11 @@ class OrdenCompra(db.Model):
     numero_orden = db.Column(db.String(50), nullable=False)
     fecha_orden = db.Column(db.Date, nullable=False)
     observaciones = db.Column(db.Text, nullable=True)
-
-    proveedor = db.Column(db.String(100), nullable=False)
+    proveedor_id       = db.Column(db.Integer, db.ForeignKey('proveedor.id'), nullable=False)
+    proveedor          = db.relationship('Proveedor', backref='ordenes_compra')
     estado = db.Column(db.String(20), default='Pendiente')
-    # p.ej: 'Pendiente', 'Recibido Parcial', 'Cerrado'
-    
     creado_por = db.Column(db.Integer, db.ForeignKey('usuario.id'), nullable=False)
-
-    # Relación 1 a N con ProductoOrdenCompra (detalle)
     productos = db.relationship('ProductoOrdenCompra', backref='orden_compra', lazy=True)
-
-    # Relación 1 a 1 con la cotización de compra
     cotizacion_compra = db.relationship('CotizacionCompra', backref='orden_compra', lazy=True)
 
 class ProductoOrdenCompra(db.Model):
@@ -343,15 +364,11 @@ class ProductoOrdenCompra(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     orden_compra_id = db.Column(db.Integer, db.ForeignKey('orden_compra.id'), nullable=False)
-
     cotizacion_compra_item_id = db.Column(db.Integer, db.ForeignKey('producto_cotizacion_compra.id'), nullable=True)
-    # si deseas saber exactamente a cuál item de la cotización apunta
-
     item_deseo_id = db.Column(db.Integer, db.ForeignKey('item_deseo.id'), nullable=True)
     precio_unitario = db.Column(db.Float, nullable=False, default=0)
     cantidad = db.Column(db.Integer, nullable=False, default=1)
     estado = db.Column(db.String(20), default='Pendiente')
-    # etc.
 
 class GuiaRemisionCompra(db.Model):
     __tablename__ = 'guia_remision_compra'
@@ -411,11 +428,6 @@ def orden_venta():
 @login_required
 def trabajador_dashboard():
     return render_template('trabajador_dashboard.html')
-
-@app.route('/cliente_dashboard')
-@login_required
-def cliente_dashboard():
-    return render_template('cliente_dashboard.html')
 
 @app.route('/cotizaciones_dashboard')
 @login_required
@@ -705,45 +717,42 @@ def buscar_productos():
 @app.route('/guardar_cotizacion', methods=['POST'])
 @login_required
 def guardar_cotizacion():
-    datos = request.json
+    datos = request.get_json()
 
-    # 1) Crear y guardar la cotización en BD
+    # 1) Crear y guardar la cotización en BD usando los nuevos campos
     nueva_cotizacion = Cotizacion(
-        cliente=datos['cliente'],
-        solicitante=datos['solicitante'],
-        email=datos['email'],
-        referencia=datos['referencia'],
-        ruc=datos['ruc'],
-        celular=datos.get('celular', ''),
-        fecha=datos['fecha'],
-        total=datos['total'],
-        plazo_entrega=int(datos['plazo_entrega']),
-        pago_credito=datos['pago_credito'],
-        tipo_cambio=datos['tipo_cambio'],
-        valor_cambio=datos.get('valor_cambio', 1.0),
-        lugar_entrega=datos.get('lugar_entrega', ''),
-        detalle_adicional=datos.get('detalle_adicional', ''),
-        creado_por=current_user.id
+        cliente_id       = datos['cliente_id'],
+        contacto_id      = datos.get('contacto_id'),
+        fecha            = datos['fecha'],
+        total            = datos['total'],
+        plazo_entrega    = int(datos['plazo_entrega']),
+        pago_credito     = datos['pago_credito'],
+        tipo_cambio      = datos['tipo_cambio'],
+        valor_cambio     = datos.get('valor_cambio', 1.0),
+        lugar_entrega    = datos.get('lugar_entrega', ''),
+        detalle_adicional= datos.get('detalle_adicional', ''),
+        creado_por       = current_user.id
     )
     db.session.add(nueva_cotizacion)
-    db.session.commit()  # Para obtener el ID
+    db.session.commit()  # Para obtener nueva_cotizacion.id
 
-    # 2) Guardar los productos en la BD
-    for producto in datos['productos']:
-        nuevo_prod_cot = ProductoCotizacion(
-            cotizacion_id=nueva_cotizacion.id,
-            producto_id=producto['id'],
-            cantidad=producto['cantidad'],
-            precio_unitario=producto['precio_unitario'],
-            porcentaje_ganancia=producto['ganancia'],
-            precio_total=producto['precio_total'],
-            tipo_compra=producto['tipo_compra']
+    # 2) Guardar los productos asociados
+    for p in datos['productos']:
+        prod_cot = ProductoCotizacion(
+            cotizacion_id       = nueva_cotizacion.id,
+            producto_id         = p.get('producto_id', p.get('id')),
+            cantidad            = p['cantidad'],
+            precio_unitario     = p['precio_unitario'],
+            porcentaje_ganancia = p.get('porcentaje_ganancia', p.get('ganancia')),
+            precio_total        = p['precio_total'],
+            tipo_compra         = p['tipo_compra']
         )
-        db.session.add(nuevo_prod_cot)
+        db.session.add(prod_cot)
+
 
     db.session.commit()
 
-    # 3) Retornar JSON indicando que todo fue OK y con el id
+    # 3) Retornar JSON
     return jsonify({
         "id": nueva_cotizacion.id,
         "mensaje": "Cotización guardada con éxito"
@@ -775,44 +784,44 @@ def actualizar_precio_producto(id):
 @app.route('/descargar_excel/<int:cot_id>', methods=['GET'])
 @login_required
 def descargar_excel(cot_id):
-    cotizacion = db.session.get(Cotizacion, cot_id)
-    if not cotizacion:
+    cot = db.session.get(Cotizacion, cot_id)
+    if not cot:
         return "No existe la cotización", 404
 
-    productos_cot = ProductoCotizacion.query.filter_by(cotizacion_id=cot_id).all()
-
+    # 1) Productos asociados
     productos_excel = []
-    for pc in productos_cot:
-        producto = db.session.get(Producto, pc.producto_id)
-        nombre_real = producto.nombre if producto else f"Prod ID {pc.producto_id}"
-
-        precio_unitario = pc.precio_unitario
-        precio_total = pc.precio_total
+    for pc in cot.productos:  # relationship desde Cotizacion → ProductoCotizacion
+        prod = db.session.get(Producto, pc.producto_id)
+        nombre = prod.nombre if prod else f"Prod ID {pc.producto_id}"
+        unidad = prod.unidad or "UND"
 
         productos_excel.append({
-            "nombre_producto": nombre_real,
-            "unidad": "UND",
-            "cantidad": pc.cantidad,
-            "precio_unitario": round(precio_unitario, 2),
-            "precio_total": round(precio_total, 2),
-            "marca_modelo": "",  # Mejora futura
+            "nombre_producto":  nombre,
+            "unidad":           unidad,
+            "cantidad":         pc.cantidad,
+            "precio_unitario":  round(pc.precio_unitario, 2),
+            "precio_total":     round(pc.precio_total, 2),
+            "marca_modelo":     "",      # mejora futura
         })
 
+    # 2) Info de cabecera, tirando de relaciones
     info_excel = {
-        "cliente": cotizacion.cliente,
-        "solicitante": cotizacion.solicitante,
-        "email": cotizacion.email,
-        "referencia": cotizacion.referencia,
-        "ruc": cotizacion.ruc,
-        "celular": cotizacion.celular,
-        "fecha": cotizacion.fecha,
-        "tipo_cambio": cotizacion.tipo_cambio,
-        "valor_cambio": cotizacion.valor_cambio,
-        "plazo_entrega": cotizacion.plazo_entrega,
-        "pago_credito": cotizacion.pago_credito,
-        "lugar_entrega": cotizacion.lugar_entrega
+        "cliente":          cot.cliente.nombre,
+        "ruc":              cot.cliente.ruc,
+        "solicitante":      cot.contacto.solicitante if cot.contacto else "",
+        "email":            cot.contacto.email       if cot.contacto else "",
+        "referencia":       cot.contacto.referencia  if cot.contacto else "",
+        "celular":          cot.contacto.celular    if cot.contacto else "",
+        "fecha":            cot.fecha,
+        "tipo_cambio":      cot.tipo_cambio,
+        "valor_cambio":     cot.valor_cambio,
+        "plazo_entrega":    cot.plazo_entrega,
+        "pago_credito":     cot.pago_credito,
+        "lugar_entrega":    cot.lugar_entrega,
+        "detalle_adicional":cot.detalle_adicional or "",
     }
 
+    # 3) Generar el Excel con tu función habitual
     excel_bytes = generate_excel_file(
         productos_excel,
         template_path="template.xlsx",
@@ -826,178 +835,198 @@ def descargar_excel(cot_id):
         download_name=f"Cotizacion_{cot_id}.xlsx"
     )
 
+
+@app.route('/clientes', methods=['GET'])
+@login_required
+def buscar_clientes():
+    term = request.args.get('term','').strip()
+    q = Cliente.query.filter(Cliente.activo.is_(True))
+    if term:
+        like = f"%{term}%"
+        q = q.filter(or_(Cliente.nombre.ilike(like),
+                         Cliente.ruc.ilike(like)))
+    resultados = q.limit(10).all()
+    return jsonify([{'id': c.id,'nombre':c.nombre,'ruc':c.ruc} for c in resultados])
+
+@app.route('/clientes', methods=['POST'])
+@login_required
+def crear_cliente():
+    data = request.get_json() or request.form
+    c = Cliente(nombre=data['nombre'], ruc=data['ruc'])
+    db.session.add(c); db.session.commit()
+    return jsonify({'id':c.id,'nombre':c.nombre,'ruc':c.ruc})
+
+@app.route('/clientes/<int:cliente_id>/contactos', methods=['GET'])
+@login_required
+def listar_contactos(cliente_id):
+    contactos = Contacto.query.filter_by(cliente_id=cliente_id,activo=True).all()
+    return jsonify([{'id':ct.id,'solicitante':ct.solicitante,'email':ct.email,
+                     'referencia':ct.referencia,'celular':ct.celular}
+                    for ct in contactos])
+
+@app.route('/clientes/<int:cliente_id>/contactos', methods=['POST'])
+@login_required
+def crear_contacto(cliente_id):
+    data = request.get_json() or request.form
+    ct = Contacto(cliente_id=cliente_id,
+                  solicitante=data['solicitante'],
+                  email=data['email'],
+                  referencia=data.get('referencia'),
+                  celular=data.get('celular'))
+    db.session.add(ct); db.session.commit()
+    return jsonify({'id':ct.id,'solicitante':ct.solicitante,'email':ct.email,
+                    'referencia':ct.referencia,'celular':ct.celular})
+
 @app.route('/cotizacion/<int:id>', methods=['GET'])
 @login_required
 def obtener_cotizacion(id):
-    # Verificar si la cotización ya fue convertida a una orden de compra
-    orden_venta_existente = db.session.query(OrdenVenta).filter_by(cotizacion_id=id).first()
-    if orden_venta_existente:
-        return jsonify({'mensaje': 'Cotización ya convertida', 'orden_venta_id': orden_venta_existente.id}), 200
+    # 1) Compruebo con SQL directo si ya existe una orden para esta cotización
+    existe = db.session.execute(
+        text("SELECT id FROM orden_venta WHERE cotizacion_id = :cid LIMIT 1"),
+        {'cid': id}
+    ).fetchone()
+    if existe:
+        return jsonify({
+            'mensaje': 'Cotización ya convertida',
+            'orden_venta_id': existe[0]
+        }), 200
 
-    # Obtener la cotización
-    cotizacion = db.session.query(Cotizacion).filter_by(id=id).first()
-    if not cotizacion:
+    # 2) Ahora sí traigo la cotización (usando ORM, que aquí no falla)
+    cot = db.session.get(Cotizacion, id)
+    if not cot:
         return jsonify({'mensaje': 'Cotización no encontrada'}), 404
 
-    # Obtener los productos de la cotización
-    productos = [
-        {
-            'id': producto.producto_id,
-            'nombre': db.session.get(Producto, producto.producto_id).nombre if db.session.get(Producto, producto.producto_id) else "Producto no encontrado",
-            'precio_unitario': producto.precio_unitario,
-            'cantidad': producto.cantidad,
-            'precio_total': producto.precio_total
-        }
-        for producto in cotizacion.productos
-    ]
+    # 3) Armo el array de productos
+    productos = []
+    for pc in cot.productos:  # relación ProductoCotizacion
+        prod = db.session.get(Producto, pc.producto_id)
+        nombre = prod.nombre if prod else f"Prod ID {pc.producto_id}"
+        productos.append({
+            'id':              pc.producto_id,
+            'nombre':          nombre,
+            'precio_unitario': pc.precio_unitario,
+            'cantidad':        pc.cantidad,
+            'precio_total':    pc.precio_total
+        })
 
-    # Obtener el creador de la cotización
-    creador = db.session.get(Usuario, cotizacion.creado_por)
-    
-    # Construir la respuesta
-    cotizacion_data = {
-        'id': cotizacion.id,
-        'cliente': cotizacion.cliente,
-        'ruc': cotizacion.ruc,
-        'fecha': cotizacion.fecha,
-        'email': cotizacion.email,
-        'estado': cotizacion.estado,
-        'creado_por': creador.nombre_usuario if creador else 'Desconocido',
-        'productos': productos
-    }
+    # 4) Nombre del usuario que creó
+    usuario = db.session.get(Usuario, cot.creado_por)
 
-    return jsonify(cotizacion_data)
+    # 5) Devuelvo el JSON que espera tu JS
+    return jsonify({
+        'id':         cot.id,
+        'cliente':    cot.cliente.nombre,   # relación Cliente
+        'ruc':        cot.cliente.ruc,
+        'fecha':      cot.fecha,
+        'estado':     cot.estado,
+        'creado_por': usuario.nombre_usuario if usuario else 'Desconocido',
+        'productos':  productos
+    }), 200
 
 @app.route('/cotizaciones', methods=['GET'])
 @login_required
 def obtener_cotizaciones_paginadas():
-    page = request.args.get('page', 1, type=int)
+    page     = request.args.get('page',     1,  type=int)
     per_page = request.args.get('per_page', 20, type=int)
-    offset = (page - 1) * per_page
 
-    # Total de cotizaciones activas
-    total_query = text("SELECT COUNT(*) FROM cotizacion")
-    total_rows = db.session.execute(total_query).scalar()
+    # Paginación con SQLAlchemy
+    pagination = Cotizacion.query.\
+        order_by(Cotizacion.id.desc()).\
+        paginate(page=page, per_page=per_page, error_out=False)
 
-    # Cotizaciones ordenadas por ID DESC (más reciente primero)
-    sql = text("""
-        SELECT * FROM cotizacion
-        ORDER BY id DESC
-        LIMIT :limit OFFSET :offset
-    """)
-    rows = db.session.execute(sql, {
-        'limit': per_page,
-        'offset': offset
-    }).mappings().all()
-
-    # Formatear resultado
     cotizaciones_data = []
-    for row in rows:
-        usuario = db.session.get(Usuario, row['creado_por'])
+    for cot in pagination.items:
+        cliente = cot.cliente          # relación SQLAlchemy Cliente obj
+        usuario = db.session.get(Usuario, cot.creado_por)
         cotizaciones_data.append({
-            'id': row['id'],
-            'cliente': row['cliente'],
-            'ruc': row['ruc'],
-            'fecha': row['fecha'],
-            'email': row['email'],
-            'estado': row['estado'],
+            'id':        cot.id,
+            'cliente':   cliente.nombre,
+            'ruc':       cliente.ruc,
+            'fecha':     cot.fecha,
+            'estado':    cot.estado,
             'creado_por': usuario.nombre_usuario if usuario else 'Desconocido'
         })
 
     return jsonify({
         'cotizaciones': cotizaciones_data,
-        'pagina_actual': page,
-        'total': total_rows,
-        'paginas': ceil(total_rows / per_page) if per_page else 1
+        'pagina_actual': pagination.page,
+        'total':          pagination.total,
+        'paginas':        pagination.pages
     })
 
 @app.route('/transformar_orden_venta/<int:cotizacion_id>', methods=['POST'])
 @login_required
 def transformar_orden_venta(cotizacion_id):
-    cotizacion = db.session.get(Cotizacion, cotizacion_id)
-    if not cotizacion:
+    # 1) Cargar la cotización
+    cot = db.session.get(Cotizacion, cotizacion_id)
+    if not cot:
         return jsonify({'mensaje': 'Cotización no encontrada'}), 404
 
-    datos = request.get_json()
-    if not datos or 'productos' not in datos:
-        return jsonify({'mensaje': 'Datos inválidos'}), 400
+    # 2) Leer payload
+    datos         = request.get_json() or {}
+    productos_sel = datos.get('productos')
+    if not productos_sel:
+        return jsonify({'mensaje': 'No se enviaron productos'}), 400
 
-    productos_seleccionados = datos['productos']
-    total_productos_cotizacion = len(cotizacion.productos)
-    total_productos_seleccionados = len(productos_seleccionados)
-
+    # 3) Crear cabecera de la orden
     nueva_orden = OrdenVenta(
-        cotizacion_id=cotizacion.id,
-        cliente=cotizacion.cliente,
-        solicitante=cotizacion.solicitante,
-        email=cotizacion.email,
-        referencia=cotizacion.referencia,
-        ruc=cotizacion.ruc,
-        celular=cotizacion.celular,
-        fecha=datetime.today().strftime('%d/%m/%Y'),
-        total=sum([float(prod['precio_total']) for prod in productos_seleccionados]),
-        estado='En Proceso',
-        creado_por=current_user.id,
-        numero_orden_compra=datos['numero_orden_compra'],
-        fecha_orden_compra=datos['fecha_orden_compra']
+        cliente_id          = cot.cliente_id,
+        contacto_id         = cot.contacto_id,
+        fecha               = datetime.today().strftime('%d/%m/%Y'),
+        total               = sum(float(p['precio_total']) for p in productos_sel),
+        estado              = 'En Proceso',
+        cotizacion_id       = cot.id,
+        creado_por          = current_user.id,
+        numero_orden_compra = datos.get('numero_orden_compra', ''),
+        fecha_orden_compra  = datos.get('fecha_orden_compra', '')
     )
     db.session.add(nueva_orden)
+    db.session.commit()  # ya tenemos nueva_orden.id
+
+    # 4) Agregar líneas y ajustar stock
+    faltantes = []
+    for p in productos_sel:
+        prod = db.session.get(Producto, int(p['id']))
+        if not prod:
+            continue
+
+        requerido = int(p['cantidad'])
+        disponible = prod.stock or 0
+
+        servido = min(requerido, disponible)
+        faltante = max(0, requerido - disponible)
+
+        linea = ProductoOrden(
+            orden_id        = nueva_orden.id,
+            producto_id     = prod.id,
+            cantidad        = servido,
+            precio_unitario = float(p['precio_unitario']),
+            precio_total    = float(p['precio_unitario']) * servido,
+            tipo_compra     = 'stock',
+            estado          = 'Pendiente'
+        )
+        db.session.add(linea)
+        prod.stock = disponible - servido
+
+        if faltante:
+            faltantes.append({
+                'producto_id': prod.id,
+                'cantidad_faltante': faltante
+            })
+
+    # 5) Actualizar estado de la cotización
+    if len(productos_sel) >= len(cot.productos):
+        cot.estado = 'Finalizado Total'
+    else:
+        cot.estado = 'Finalizado Parcial'
+
     db.session.commit()
 
-    # Productos sin stock suficiente
-    productos_faltantes = []
-
-    for producto in productos_seleccionados:
-        prod_obj = db.session.get(Producto, int(producto['id']))
-        cantidad_deseada = int(producto['cantidad'])
-
-        if prod_obj:
-            cantidad_en_stock = prod_obj.stock or 0
-            faltante = cantidad_deseada - cantidad_en_stock
-
-            if faltante > 0:
-                # Agrega el producto a la orden, pero con lo que hay en stock
-                producto_orden = ProductoOrden(
-                    orden_id=nueva_orden.id,
-                    producto_id=prod_obj.id,
-                    cantidad=cantidad_en_stock,
-                    precio_unitario=producto['precio_unitario'],
-                    precio_total=float(producto['precio_unitario']) * cantidad_en_stock,
-                    tipo_compra='stock',
-                    estado='Pendiente'
-                )
-                db.session.add(producto_orden)
-                prod_obj.stock = 0
-
-                productos_faltantes.append({
-                    'producto': prod_obj,
-                    'cantidad_faltante': faltante
-                })
-
-            else:
-                # Stock suficiente
-                producto_orden = ProductoOrden(
-                    orden_id=nueva_orden.id,
-                    producto_id=prod_obj.id,
-                    cantidad=cantidad_deseada,
-                    precio_unitario=producto['precio_unitario'],
-                    precio_total=producto['precio_total'],
-                    tipo_compra='stock',
-                    estado='Pendiente'
-                )
-                db.session.add(producto_orden)
-                prod_obj.stock -= cantidad_deseada
-
-        if total_productos_seleccionados >= total_productos_cotizacion:
-            cotizacion.estado = 'Finalizado Total'
-        else:
-            cotizacion.estado = 'Finalizado Parcial'
-        db.session.commit()
-        
-        return jsonify({
-            'mensaje': 'Orden de Venta generada correctamente.',
-            'estado': cotizacion.estado
-        }), 200
+    return jsonify({
+        'mensaje': 'Orden de Venta generada correctamente.',
+        'estado': cot.estado,
+        'productos_faltantes': faltantes
+    }), 200
 
 @app.route('/rechazar_cotizacion/<int:cotizacion_id>', methods=['POST'])
 @login_required
@@ -1038,113 +1067,114 @@ def logout():
 @app.route('/ordenes_venta', methods=['GET'])
 @login_required
 def obtener_ordenes_venta():
-    page = request.args.get('page', 1, type=int)
+    page     = request.args.get('page',     1,  type=int)
     per_page = request.args.get('per_page', 20, type=int)
 
-    ordenes_paginadas = OrdenVenta.query.options(
-        joinedload(OrdenVenta.cotizacion),
-        joinedload(OrdenVenta.productos),
-        joinedload(OrdenVenta.guias_remision),
-        joinedload(OrdenVenta.creador)
-    ).order_by(OrdenVenta.id.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    pag = OrdenVenta.query.\
+        options(
+            joinedload(OrdenVenta.cliente),
+            joinedload(OrdenVenta.contacto),
+            joinedload(OrdenVenta.creador),
+            joinedload(OrdenVenta.cotizacion)
+        ).\
+        order_by(OrdenVenta.id.desc()).\
+        paginate(page=page, per_page=per_page, error_out=False)
 
     hoy = datetime.today().date()
-    output = []
+    out = []
+    for ordv in pag.items:
+        # datos de cliente y contacto
+        cliente  = ordv.cliente
+        contacto = ordv.contacto
+        creador  = ordv.creador
+        cot      = ordv.cotizacion
 
-    for orden in ordenes_paginadas.items:
-        cotizacion = orden.cotizacion
-        creador = orden.creador
+        tipo_cambio   = cot.tipo_cambio   if cot else "Soles"
+        plazo_entrega = cot.plazo_entrega if cot else "No definido"
+        pago_credito  = cot.pago_credito  if cot else "No definido"
+        valor_cambio  = cot.valor_cambio  if cot else 1.0
+        total_soles   = ordv.total
 
-        tipo_cambio = cotizacion.tipo_cambio if cotizacion else "Soles"
-        plazo_entrega = cotizacion.plazo_entrega if cotizacion else "No definido"
-        pago_credito = cotizacion.pago_credito if cotizacion else "No definido"
-        total_soles = orden.total
-        valor_cambio  = cotizacion.valor_cambio if cotizacion else 1.0 
+        # conversión a USD/EUR
+        total_conv = None
+        tc_low = tipo_cambio.lower()
+        if tc_low == "dólares":
+            total_conv = f"${total_soles/valor_cambio:.2f} (USD)"
+        elif tc_low == "euros":
+            total_conv = f"€{total_soles/valor_cambio:.2f} (EUR)"
 
-        total_convertido = None
-        if tipo_cambio.lower() == "dólares" and valor_cambio:
-            total_convertido = f"${total_soles / valor_cambio:.2f} (USD)"
-        elif tipo_cambio.lower() == "euros" and valor_cambio:
-            total_convertido = f"€{total_soles / valor_cambio:.2f} (EUR)"
-
-        estado_tiempo = "Fecha no definida"
-        if orden.fecha_orden_compra:
+        # cálculo de “en tiempo”
+        est_tiempo = "Fecha no definida"
+        if ordv.fecha_orden_compra and cot and isinstance(cot.plazo_entrega, int):
             try:
-                fecha_orden = datetime.strptime(orden.fecha_orden_compra, "%Y-%m-%d").date()
-                if cotizacion and isinstance(cotizacion.plazo_entrega, int):
-                    fecha_limite = fecha_orden + timedelta(days=cotizacion.plazo_entrega)
-                    if fecha_limite > hoy:
-                        estado_tiempo = "A tiempo"
-                    elif fecha_limite == hoy:
-                        estado_tiempo = "Tiempo límite"
-                    else:
-                        estado_tiempo = "A destiempo"
-            except Exception as e:
-                estado_tiempo = "Error en fecha"
+                fo = datetime.strptime(ordv.fecha_orden_compra, "%Y-%m-%d").date()
+                limite = fo + timedelta(days=cot.plazo_entrega)
+                if limite > hoy:       est_tiempo = "A tiempo"
+                elif limite == hoy:    est_tiempo = "Tiempo límite"
+                else:                  est_tiempo = "A destiempo"
+            except:
+                est_tiempo = "Error en fecha"
 
-        orden_data = {
-            'id': orden.id,
-            'cliente': orden.cliente,
-            'solicitante': orden.solicitante,
-            'fecha': orden.fecha,
-            'fecha_orden_compra': orden.fecha_orden_compra or "No definida",
-            'estado_tiempo': estado_tiempo,
-            'estado': orden.estado,
-            'creado_por': creador.nombre_usuario if creador else "Desconocido",
-            'productos': [p.producto_id for p in orden.productos],
-            'tiene_guias_remision': bool(orden.guias_remision),
-            'total': f"S/. {total_soles:.2f}",
-            'tipo_cambio': tipo_cambio,
-            'total_convertido': total_convertido,
-            'plazo_entrega': plazo_entrega,
-            'pago_credito': pago_credito
-        }
-
-        output.append(orden_data)
+        out.append({
+            'id':                ordv.id,
+            'cliente':           cliente.nombre if cliente else '',
+            'solicitante':       contacto.solicitante if contacto else '',
+            'fecha_orden_compra':ordv.fecha_orden_compra or 'No definida',
+            'estado':            ordv.estado,
+            'estado_tiempo':     est_tiempo,
+            'total':             f"S/. {total_soles:.2f}",
+            'tipo_cambio':       tipo_cambio,
+            'total_convertido':  total_conv,
+            'plazo_entrega':     plazo_entrega,
+            'pago_credito':      pago_credito,
+            'creado_por':        creador.nombre_usuario if creador else 'Desconocido',
+            'numero_orden_compra': ordv.numero_orden_compra
+        })
 
     return jsonify({
-        'ordenes': output,
-        'pagina_actual': ordenes_paginadas.page,
-        'total_paginas': ordenes_paginadas.pages,
-        'total_registros': ordenes_paginadas.total
+        'ordenes':        out,
+        'pagina_actual':  pag.page,
+        'total_paginas':  pag.pages,
+        'total_registros':pag.total
     })
 
 @app.route('/orden_venta/<int:orden_id>', methods=['GET'])
+@login_required
 def obtener_orden(orden_id):
-    orden = db.session.get(OrdenVenta, orden_id)
-    if not orden:
+    ordv = db.session.get(OrdenVenta, orden_id)
+    if not ordv:
         return jsonify({'mensaje': 'Orden no encontrada'}), 404
 
-    productos = []
-    for producto in orden.productos:
-        producto_obj = db.session.get(Producto, producto.producto_id)
-        nombre_producto = producto_obj.nombre if producto_obj else "Producto no encontrado"
-        stock_producto = producto_obj.stock if producto_obj else "No disponible"
+    cliente  = ordv.cliente
+    contacto = ordv.contacto
 
+    productos = []
+    for line in ordv.productos:
+        prod = db.session.get(Producto, line.producto_id)
         productos.append({
-            'id': producto.id,
-            'nombre': nombre_producto,
-            'stock': stock_producto,
-            'cantidad': producto.cantidad,
-            'precio_unitario': producto.precio_unitario,
-            'precio_total': producto.precio_total,
-            'tipo_compra': producto.tipo_compra,
+            'id':             line.id,
+            'nombre':         prod.nombre if prod else 'No encontrado',
+            'stock':          prod.stock  if prod else None,
+            'cantidad':       line.cantidad,
+            'precio_unitario':line.precio_unitario,
+            'precio_total':   line.precio_total,
+            'tipo_compra':    line.tipo_compra
         })
 
-    orden_data = {
-        'id': orden.id,
-        'cliente': orden.cliente,
-        'solicitante': orden.solicitante,
-        'email': orden.email,
-        'referencia': orden.referencia,
-        'ruc': orden.ruc,
-        'celular': orden.celular,
-        'fecha': orden.fecha,
-        'estado': orden.estado,
-        'productos': productos
-    }
-
-    return jsonify(orden_data)
+    return jsonify({
+        'id':                 ordv.id,
+        'cliente':            cliente.nombre if cliente else '',
+        'ruc':                cliente.ruc     if cliente else '',
+        'solicitante':        contacto.solicitante if contacto else '',
+        'email':              contacto.email       if contacto else '',
+        'referencia':         contacto.referencia  if contacto else '',
+        'celular':            contacto.celular    if contacto else '',
+        'fecha':              ordv.fecha,
+        'estado':             ordv.estado,
+        'numero_orden_compra':ordv.numero_orden_compra,
+        'fecha_orden_compra': ordv.fecha_orden_compra,
+        'productos':          productos
+    })
 
 @app.route('/actualizar_estado_producto/<int:producto_id>', methods=['PUT'])
 def actualizar_estado_producto(producto_id):

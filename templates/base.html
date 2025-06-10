@@ -11,6 +11,13 @@
 
     <!-- Tu archivo style.css -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <!-- jQuery UI para autocomplete -->
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+
+    <!-- Font-Awesome (para iconitos + / contacto) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+
 </head>
 
 <body>
@@ -28,7 +35,7 @@
             <li><a href="{{ url_for('cotizaciones_dashboard') }}">Creación de Cotizaciones</a></li>
             <li><a href="{{ url_for('verificacion_cotizacion') }}">Control de Cotizaciones</a></li>
             <li><a href="{{ url_for('orden_venta') }}">Órdenes de Venta</a></li>
-            <li><a href="{{ url_for('guias_remision') }}">Guías de Remisión</a></li>
+            <!--<li><a href="{{ url_for('guias_remision') }}">Guías de Remisión</a></li>-->
             <li><a href="{{ url_for('lista_deseos_dashboard') }}">Lista de Deseos</a></li>
             <li><a href="{{ url_for('cotizaciones_compra_dashboard') }}">Generacion de Cotizaciones para Compra</a></li>
             <li><a href="{{ url_for('orden_compra_dashboard') }}">Generacion de Ordenes para Comprar</a></li>
@@ -46,6 +53,7 @@
     <!-- Scripts comunes a todas las páginas -->
     <!-- 1. jQuery -->
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
     <!-- 2. Popper -->
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
     <!-- 3. Bootstrap (JS) -->

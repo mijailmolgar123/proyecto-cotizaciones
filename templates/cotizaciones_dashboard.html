@@ -3,87 +3,91 @@
 {% block title %}Cotizaciones{% endblock %}
 
 {% block content %}
-    <div class="container">
-        <h1>Cotización</h1>
+<div class="container">
+    <h1>Cotización</h1>
 
-        <div class="row">
-            <!-- Columna izquierda: Búsqueda de productos -->
-            <div class="col-md-4">
-                <div class="form-group">
-                    <label for="buscar-producto">Buscar Producto:</label>
-                    <input type="text" class="form-control" id="buscar-producto" placeholder="Ingrese nombre o código">
-                </div>
-                <table class="table table-striped mt-3">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Nombre Producto</th>
-                            <th>Stock</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="productos-busqueda-lista">
-                        <!-- Aquí se agregarán los productos dinámicamente -->
-                    </tbody>
-                </table>
-                <button id="btn-ver-mas" class="btn btn-primary mt-2">Ver más</button>
-                <p id="mensaje-fin" style="display: none;">No hay más resultados</p>
+    <div class="row">
+        <!-- Columna izquierda: Búsqueda de productos -->
+        <div class="col-md-4">
+            <div class="form-group">
+                <label for="buscar-producto">Buscar Producto:</label>
+                <input type="text" class="form-control" id="buscar-producto" placeholder="Ingrese nombre o código">
             </div>
+            <table class="table table-striped mt-3">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nombre Producto</th>
+                        <th>Stock</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="productos-busqueda-lista">
+                    <!-- Aquí se agregarán los productos dinámicamente -->
+                </tbody>
+            </table>
+            <button id="btn-ver-mas" class="btn btn-primary mt-2">Ver más</button>
+            <p id="mensaje-fin" style="display: none;">No hay más resultados</p>
+        </div>
 
-            <!-- Columna derecha: Productos seleccionados para la cotización -->
-            <div class="col-md-8">
-                <h3>Edicion de Cotizacion</h3>
-                <table class="table table-striped mt-3">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Nombre Producto</th>
-                            <th>Stock</th>
-                            <th>Unidad</th>
-                            <th>Cant. Necesaria</th>
-                            <th>Precio Uni. en Soles</th>
-                            <th>% Margen</th>
-                            <th>Precio Uni. sin IGV (moneda seleccionada)</th>
-                            <th>Precio Total</th>
-                            <th>Precio Total sin IGV (moneda seleccionada)</th>
-                            <th>Tipo de Compra</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="orden-venta-lista">
-                        <!-- Aquí se agregarán los productos de la cotización -->
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <th colspan="7" class="text-right">Totales:</th>
-                            <th id="total-precio">0</th>
-                            <th id="total-sin-igv">0</th>
-                            <th colspan="2"></th>
-                        </tr>
-                    </tfoot>
-                </table>
-                <div class="row mb-3">
-                    <div class="col-md-4">
-                        <label for="tipo-moneda-general">Tipo de Moneda:</label>
-                        <select class="form-control" id="tipo-moneda-general">
-                            <option value="Soles">Soles</option>
-                            <option value="Dólares">Dólares</option>
-                            <option value="Euros">Euros</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label for="monto-cambio">Valor del Tipo de Cambio:</label>
-                        <input type="number" class="form-control" id="monto-cambio" step="0.01" value="1.00">
-                    </div>
-                </div>                              
-                <!-- Aquí está el botón para generar la cotización -->
-                <button class="btn btn-success" id="generar-cotizacion">Generar Cotización</button>
+        <!-- Columna derecha: Productos seleccionados para la cotización -->
+        <div class="col-md-8">
+            <h3>Edicion de Cotizacion</h3>
+            <table class="table table-striped mt-3">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nombre Producto</th>
+                        <th>Stock</th>
+                        <th>Unidad</th>
+                        <th>Cant. Necesaria</th>
+                        <th>Precio Uni. en Soles</th>
+                        <th>% Margen</th>
+                        <th>Precio Uni. sin IGV (moneda seleccionada)</th>
+                        <th>Precio Total</th>
+                        <th>Precio Total sin IGV (moneda seleccionada)</th>
+                        <th>Tipo de Compra</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="orden-venta-lista">
+                    <!-- Aquí se agregarán los productos de la cotización -->
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th colspan="7" class="text-right">Totales:</th>
+                        <th id="total-precio">0</th>
+                        <th id="total-sin-igv">0</th>
+                        <th colspan="2"></th>
+                    </tr>
+                </tfoot>
+            </table>
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="tipo-moneda-general">Tipo de Moneda:</label>
+                    <select class="form-control" id="tipo-moneda-general">
+                        <option value="Soles">Soles</option>
+                        <option value="Dólares">Dólares</option>
+                        <option value="Euros">Euros</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="monto-cambio">Valor del Tipo de Cambio:</label>
+                    <input type="number" class="form-control" id="monto-cambio" step="0.01" value="1.00">
+                </div>
+            </div>
+            <!-- Aquí está el botón para generar la cotización -->
+            <button class="btn btn-success" id="generar-cotizacion">Generar Cotización</button>
+            <!-- Botón para abrir el modal de "Crear Pre-Producto" -->
+            <button class="btn btn-info" id="btn-preproducto" data-toggle="modal" data-target="#modalPreProducto">
+                Crear Pre-Producto
+            </button>
 
-                <!-- Modal para completar la cotización -->
-                <div class="modal fade" id="modalCotizacion" tabindex="-1" role="dialog"
-                    aria-labelledby="modalCotizacionLabel" aria-hidden="true">
-                    <div class="modal-dialog" role="document">
-                        <div class="modal-content">
+            <!-- Modal para completar la cotización -->
+            <div class="modal fade" id="modalCotizacion" tabindex="-1" role="dialog">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+                    <div class="modal-content">
+                        <form id="form-cotizacion" novalidate>
                             <div class="modal-header">
                                 <h5 class="modal-title" id="modalCotizacionLabel">Completar Cotización</h5>
                                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
@@ -91,134 +95,201 @@
                                 </button>
                             </div>
                             <div class="modal-body">
-                                <form id="form-cotizacion">
+                                <!-- Paso 1: Cliente -->
+                                <div id="paso-1-cliente" class="mb-3">
+                                    <label for="cliente-busqueda">Cliente:</label>
+                                    <div class="input-group">
+                                        <input type="text" id="cliente-busqueda" name="cliente" class="form-control"
+                                            placeholder="Busca por nombre o RUC…" autocomplete="off" required>
+                                        <input type="hidden" id="cliente-id" name="cliente_id">
+                                        <input type="text" id="ruc-input" name="ruc" readonly class="form-control mb-2">
+                                        <div class="input-group-append">
+                                            <!-- botón para crear nuevo cliente -->
+                                            <button type="button" class="btn btn-outline-secondary"
+                                                id="btn-nuevo-cliente">
+                                                <i class="fas fa-user-plus"></i>
+                                            </button>
+                                        </div>
+                                        <div class="input-group-append">
+                                            <!-- botón para cambiar selección de cliente -->
+                                            <button type="button" class="btn btn-outline-secondary"
+                                                id="btn-cambiar-cliente" style="display:none;">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <ul id="lista-clientes" class="list-group mt-2"></ul>
+                                </div>
+
+                                <!-- Formulario Nuevo Cliente -->
+                                <div id="form-nuevo-cliente" class="border p-3 mb-4" style="display:none;">
+                                    <h6>Crear Cliente</h6>
                                     <div class="form-group">
-                                        <label for="cliente">Cliente:</label>
-                                        <input type="text" class="form-control" id="cliente" required>
+                                        <input type="text" id="nuevo-cliente-nombre" name="nuevo_cliente_nombre"
+                                            class="form-control" placeholder="Nombre" required>
                                     </div>
                                     <div class="form-group">
-                                        <label for="solicitante">Solicitante:</label>
-                                        <input type="text" class="form-control" id="solicitante" required>
+                                        <input type="text" id="nuevo-cliente-ruc" name="nuevo_cliente_ruc"
+                                            class="form-control" placeholder="RUC" required>
                                     </div>
-                                    <div class="form-group">
-                                        <label for="email">Email:</label>
-                                        <input type="email" class="form-control" id="email" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="referencia">Referencia:</label>
-                                        <input type="text" class="form-control" id="referencia" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="ruc">RUC:</label>
-                                        <input type="text" class="form-control" id="ruc" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="celular">Celular (Opcional):</label>
-                                        <input type="text" class="form-control" id="celular">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="plazo_entrega">Plazo de Entrega (días):</label>
-                                        <input type="number" class="form-control" id="plazo_entrega" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="pago_credito">Plazo de Pago en Crédito:</label>
-                                        <input type="text" class="form-control" id="pago_credito" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="lugar_entrega">Lugar de Entrega (Opcional):</label>
-                                        <input type="text" class="form-control" id="lugar_entrega">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="detalle_adicional">Detalle Adicional (Opcional):</label>
-                                        <textarea class="form-control" id="detalle_adicional" rows="3"></textarea>
-                                    </div>
-                                </form>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                                <button type="button" class="btn btn-primary" onclick="guardarCotizacion()">Guardar
-                                    Cotización</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- Botón para abrir el modal de "Crear Pre-Producto" -->
-                <button class="btn btn-info" id="btn-preproducto" data-toggle="modal" data-target="#modalPreProducto">
-                    Crear Pre-Producto
-                </button>
-                
-                <!-- Modal para Crear Pre-Producto -->
-                <div class="modal fade" id="modalPreProducto" tabindex="-1" role="dialog" aria-labelledby="modalPreProductoLabel"
-                    aria-hidden="true">
-                    <div class="modal-dialog" role="document">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title" id="modalPreProductoLabel">Crear Pre-Producto</h5>
-                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
-                            </div>
-                            <div class="modal-body">
-                                <form id="form-preproducto">
-                                    <div class="form-group">
-                                        <label for="nombre-preproducto">Nombre del Pre-Producto:</label>
-                                        <input type="text" class="form-control" id="nombre-preproducto" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="precio-preproducto">Precio:</label>
-                                        <input type="number" class="form-control" id="precio-preproducto" step="0.01" value="0"
+                                    <button type="button" class="btn btn-sm btn-primary"
+                                        id="guardar-nuevo-cliente">Guardar Cliente</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" id="cancelar-nuevo-cliente">
+                                        Cancelar
+                                    </button>
+                                </div>
+
+                                <!-- Paso 2: Contacto -->
+                                <div id="paso-2-contacto" class="mb-3" style="display:none;">
+                                    <label for="contacto-seleccion">Contacto:</label>
+                                    <div class="input-group">
+                                        <select id="contacto-seleccion" name="contacto_id" class="form-control"
                                             required>
+                                            <option value="">Selecciona un contacto…</option>
+                                        </select>
+                                        <div class="input-group-append">
+                                            <!-- botón para crear nuevo contacto -->
+                                            <button type="button" class="btn btn-outline-secondary"
+                                                id="btn-nuevo-contacto">
+                                                <i class="fas fa-address-book"></i>
+                                            </button>
+                                        </div>
+                                        <div class="input-group-append">
+                                            <!-- botón para cambiar selección de contacto -->
+                                            <button type="button" class="btn btn-outline-secondary"
+                                                id="btn-cambiar-contacto" style="display:none;">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </div>
                                     </div>
-                                    <!-- Opcional, un campo "stock" inicial = 0 -->
+                                </div>
+
+                                <!-- Formulario Nuevo Contacto -->
+                                <div id="form-nuevo-contacto" class="border p-3 mb-4" style="display:none;">
+                                    <h6>Crear Contacto</h6>
                                     <div class="form-group">
-                                        <label for="stock-preproducto">Stock inicial (opcional):</label>
-                                        <input type="number" class="form-control" id="stock-preproducto" value="0">
+                                        <input type="text" id="nuevo-contacto-nombre" name="nuevo_contacto_nombre"
+                                            class="form-control" placeholder="Nombre solicitante" required>
                                     </div>
-                                </form>
+                                    <div class="form-group">
+                                        <input type="email" id="nuevo-contacto-email" name="nuevo_contacto_email"
+                                            class="form-control" placeholder="Email" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <input type="text" id="nuevo-contacto-referencia"
+                                            name="nuevo_contacto_referencia" class="form-control"
+                                            placeholder="Referencia">
+                                    </div>
+                                    <div class="form-group">
+                                        <input type="text" id="nuevo-contacto-celular" name="nuevo_contacto_celular"
+                                            class="form-control" placeholder="Celular">
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-primary"
+                                        id="guardar-nuevo-contacto">Guardar Contacto</button>
+                                    <button type="button" class="btn btn-sm btn-secondary" id="cancelar-nuevo-contacto">
+                                        Cancelar
+                                    </button>
+                                </div>
+
+                                <!-- Paso 3: Datos Adicionales -->
+                                <div class="form-group">
+                                    <label for="plazo_entrega">Plazo de Entrega (días):</label>
+                                    <input type="number" id="plazo_entrega" name="plazo_entrega" class="form-control"
+                                        required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="pago_credito">Plazo de Pago en Crédito:</label>
+                                    <input type="text" id="pago_credito" name="pago_credito" class="form-control"
+                                        required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="lugar_entrega">Lugar de Entrega (Opcional):</label>
+                                    <input type="text" id="lugar_entrega" name="lugar_entrega" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label for="detalle_adicional">Detalle Adicional (Opcional):</label>
+                                    <textarea id="detalle_adicional" name="detalle_adicional" class="form-control"
+                                        rows="3"></textarea>
+                                </div>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                                <button type="button" class="btn btn-primary" onclick="crearPreProducto()">Crear</button>
+                                <button type="submit" class="btn btn-primary">Guardar Cotización</button>
                             </div>
-                        </div>
+                        </form>
                     </div>
                 </div>
-                <!-- Modal: Editar Precio -->
-                <div class="modal fade" id="modalEditarPrecio" tabindex="-1" role="dialog"
-                aria-labelledby="modalEditarPrecioLabel" aria-hidden="true">
-                <div class="modal-dialog modal-sm" role="document">
+            </div>
+
+
+        </div>
+
+        <!-- Modal para Crear Pre-Producto -->
+        <div class="modal fade" id="modalPreProducto" tabindex="-1" role="dialog"
+            aria-labelledby="modalPreProductoLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
                 <div class="modal-content">
-                <div class="modal-header">
-                <h5 class="modal-title" id="modalEditarPrecioLabel">Editar Precio</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
-                </div>
-                <div class="modal-body">
-                <form id="form-editar-precio">
-                    <div class="form-group">
-                    <label for="input-nuevo-precio">Nuevo Precio Uni. (S/.)</label>
-                    <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        class="form-control"
-                        id="input-nuevo-precio"
-                        required
-                    >
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalPreProductoLabel">Crear Pre-Producto</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
                     </div>
-                </form>
+                    <div class="modal-body">
+                        <form id="form-preproducto">
+                            <div class="form-group">
+                                <label for="nombre-preproducto">Nombre del Pre-Producto:</label>
+                                <input type="text" class="form-control" id="nombre-preproducto" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="precio-preproducto">Precio:</label>
+                                <input type="number" class="form-control" id="precio-preproducto" step="0.01" value="0"
+                                    required>
+                            </div>
+                            <!-- Opcional, un campo "stock" inicial = 0 -->
+                            <div class="form-group">
+                                <label for="stock-preproducto">Stock inicial (opcional):</label>
+                                <input type="number" class="form-control" id="stock-preproducto" value="0">
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="crearPreProducto()">Crear</button>
+                    </div>
                 </div>
-                <div class="modal-footer">
-                <button class="btn btn-secondary btn-sm" data-dismiss="modal">Cancelar</button>
-                <button class="btn btn-primary btn-sm" id="btn-guardar-precio">Guardar</button>
-                </div>
-                </div>
-                </div>
+            </div>
+        </div>
+        <!-- Modal: Editar Precio -->
+        <div class="modal fade" id="modalEditarPrecio" tabindex="-1" role="dialog"
+            aria-labelledby="modalEditarPrecioLabel" aria-hidden="true">
+            <div class="modal-dialog modal-sm" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalEditarPrecioLabel">Editar Precio</h5>
+                        <button type="button" class="close" data-dismiss="modal">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="form-editar-precio">
+                            <div class="form-group">
+                                <label for="input-nuevo-precio">Nuevo Precio Uni. (S/.)</label>
+                                <input type="number" step="0.01" min="0" class="form-control" id="input-nuevo-precio"
+                                    required>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary btn-sm" data-dismiss="modal">Cancelar</button>
+                        <button class="btn btn-primary btn-sm" id="btn-guardar-precio">Guardar</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
+</div>
 
 {% endblock %}
 
