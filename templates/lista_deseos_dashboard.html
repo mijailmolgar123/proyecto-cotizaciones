@@ -9,24 +9,27 @@
         <!-- Sección de datos de la lista en la parte superior -->
         <div class="col-12">
             <form id="form-datos-lista">
-                <div class="form-group">
-                    <label for="cliente">Cliente/Empresa:</label>
-                    <input type="text" class="form-control" id="cliente" placeholder="Empresa o persona solicitante"
-                        required>
-                </div>
-                <div class="form-group">
-                    <label for="ruc">RUC (opcional):</label>
-                    <input type="text" class="form-control" id="ruc">
-                </div>
-                <div class="form-group">
+                <!-- Cliente/Empresa -->
+                <div class="form-group mb-3">
+                    <label for="cliente-busqueda">Cliente/Empresa:</label>
+                    <div class="input-group">
+                        <input type="text" id="cliente-busqueda" class="form-control" placeholder="Busca nombre o RUC…"
+                            autocomplete="off" required>
+                        <input type="hidden" id="cliente-id" name="cliente_id">
+                        <div class="input-group-append">
+                            <button type="button" class="btn btn-outline-secondary" id="btn-cambiar-cliente"
+                                style="display:none" title="Cambiar Cliente">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </div>
+                    </div>
                     <label for="prioridad">Prioridad:</label>
-                    <select class="form-control" id="prioridad">
-                        <option value="Normal">Normal</option>
+                    <select id="prioridad" name="prioridad" class="form-control">
+                        <option value="Normal" selected>Normal</option>
                         <option value="Alta">Alta</option>
                         <option value="Baja">Baja</option>
                     </select>
                 </div>
-                <!-- Comentario o estado, si deseas -->
             </form>
         </div>
     </div>

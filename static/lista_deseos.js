@@ -167,54 +167,81 @@ function crearItemPreProducto() {
     });
 }
 
-
-// 8. Al final, “Crear Lista de Deseos”
 function crearListaDeseosFinal(){
-    let cliente = $('#cliente').val().trim();
-    if(!cliente){
-        alert("Debes ingresar el nombre del cliente/empresa.");
-        return;
+  const clienteId = $('#cliente-id').val().trim();
+  if (!clienteId) {
+    alert("Debes seleccionar un cliente válido.");
+    return;
+  }
+
+  const prioridad = $('#prioridad').val();  // <-- capturamos prioridad
+
+  if (itemsDeseos.length === 0) {
+    alert("No hay ningún producto en la lista de deseos.");
+    return;
+  }
+
+  const dataLista = {
+    cliente_id: clienteId,
+    prioridad:  prioridad,           // <-- enviamos prioridad
+    comentario: $('#comentario').val() || "",
+    items: itemsDeseos.map(it => ({
+      producto_id:        it.productId,
+      nombre_preproducto: it.productId ? null : it.nombre,
+      cantidad_necesaria: it.stockNecesario,
+      precio_referencia:  it.precio
+    }))
+  };
+
+  $.ajax({
+    url: '/lista_deseos/crear_con_items',
+    method: 'POST',
+    contentType: 'application/json',
+    data: JSON.stringify(dataLista),
+    success(resp){
+      alert(resp.mensaje);
+      // resetear todo…
+    },
+    error(err){
+      console.error("Error al crear lista de deseos", err);
+      alert("Ocurrió un error al crear la lista de deseos.");
     }
-    let ruc = $('#ruc').val().trim();
-    let prioridad = $('#prioridad').val();
-
-    if(itemsDeseos.length === 0){
-        alert("No hay ningún producto en la lista de deseos.");
-        return;
-    }
-
-    let dataLista = {
-        cliente: cliente,
-        ruc: ruc,
-        prioridad: prioridad,
-        items: []
-    };
-
-    itemsDeseos.forEach(it => {
-        dataLista.items.push({
-            producto_id: it.productId, 
-            nombre_preproducto: (it.productId ? null : it.nombre),
-            cantidad_necesaria: it.stockNecesario,
-            precio_referencia: it.precio
-        });
-    });
-
-    $.ajax({
-        url: '/lista_deseos/crear_con_items',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify(dataLista),
-        success: function(resp){
-            alert(resp.mensaje);
-            // Limpia
-            $('#form-datos-lista')[0].reset();
-            itemsDeseos = [];
-            renderListaDeseos();
-        },
-        error: function(err){
-            console.error("Error al crear la lista de deseos", err);
-            alert("Ocurrió un error al crear la lista de deseos.");
-        }
-    });
+  });
 }
+
+$(function(){
+  // ── Autocomplete de Cliente ──
+  $("#cliente-busqueda").autocomplete({
+    minLength: 2,
+    delay: 300,
+    source(request, response) {
+      $.getJSON("/clientes", { term: request.term }, function(data){
+        response(data.map(c => ({
+          label: `${c.nombre} — ${c.ruc}`,
+          value: c.nombre,
+          id:    c.id
+        })));
+      });
+    },
+    select(event, ui) {
+      // Rellenar el input y el hidden, desactivar búsqueda
+      $("#cliente-busqueda")
+        .val(ui.item.label)
+        .prop("disabled", true);
+      $("#cliente-id").val(ui.item.id);
+      $("#btn-cambiar-cliente").show();
+      return false;
+    }
+  });
+
+  // ── Botón “Cambiar Cliente” ──
+  $("#btn-cambiar-cliente").click(function(){
+    $("#cliente-busqueda")
+      .prop("disabled", false)
+      .val("")
+      .focus();
+    $("#cliente-id").val("");
+    $(this).hide();
+  });
+});
 

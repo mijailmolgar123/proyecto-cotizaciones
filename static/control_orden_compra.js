@@ -1,125 +1,158 @@
-let paginaOC = 1, totalPagOC = 1, currentOC = null, modalAnterior = null;
+let paginaOC = 1, totalPagOC = 1, currentOC = null;
 
-$(document).ready(()=>{
-  cargarOC();
-  $('#btn-ver-mas-oc').click(()=>{
-    if(paginaOC < totalPagOC) cargarOC(paginaOC+1);
+// Al cargar la página
+$(document).ready(() => {
+  cargarOC(1);
+  $('#btn-ver-mas-oc').click(() => {
+    if (paginaOC < totalPagOC) cargarOC(paginaOC + 1);
   });
 });
 
-function cargarOC(page=1){
-  $.getJSON(`/orden_compra?page=${page}&per_page=20`, resp=>{
-    paginaOC = resp.pagina_actual;
-    totalPagOC = resp.paginas;
-    let $tb = $('#oc-lista');
-    if(page===1) $tb.empty();
-    resp.ordenes.forEach(o=>{
+// 1) Listar Órdenes de Compra paginadas
+function badgeEstado(estado) {
+  const map = {
+    'Pendiente': 'secondary',
+    'En Proceso': 'warning',
+    'Emitida':   'warning',
+    'Cerrada':   'success'
+  };
+  return `<span class="badge badge-${map[estado]||'light'}">${estado}</span>`;
+}
+
+// 1) Listar Órdenes
+function cargarOC(pagina = 1) {
+  $.getJSON(`/orden_compra?page=${pagina}&per_page=20`, resp => {
+    const $tb = $('#oc-lista');
+    if (pagina === 1) $tb.empty();
+    resp.ordenes.forEach(o => {
       $tb.append(`
         <tr>
           <td>${o.id}</td>
-          <td>${o.cotizacion_compra_id||''}</td>
+          <td>${o.cliente}</td>
           <td>${o.numero_orden}</td>
-          <td>${o.fecha_orden}</td>
-          <td>${o.proveedor}</td>
-          <td>${o.estado}</td>
-          <td>${o.creado_por}</td>
+          <td>${o.numero_cotizacion}</td>
+          <td>${o.fecha}</td>
+          <td>${o.monto.toFixed(2)}</td>
+          <td>${o.moneda}</td>
+          <td>${badgeEstado(o.estado)}</td>
+          <td>${o.solicitante}</td>
+          <td>${o.tiempo_dias}</td>
           <td>
-            <button class="btn btn-sm btn-primary"
-                    onclick="verDetalleOC(${o.id})">Detalle</button>
+            <button class="btn btn-sm btn-primary" onclick="verDetalleOC(${o.id})">
+              Detalle
+            </button>
           </td>
         </tr>`);
     });
-    $('#btn-ver-mas-oc').toggle(paginaOC < totalPagOC);
-  });
+    $('#btn-ver-mas-oc').toggle(resp.pagina_actual < resp.paginas);
+  }).fail(() => alert('Error al cargar órdenes de compra.'));
 }
 
-function verDetalleOC(id){
+// 2) Ver detalle
+function verDetalleOC(id) {
   currentOC = id;
-  $('#productos-orden-compra-lista, #lista-guias-compra').empty();
-  $('#numeroGuiaCompra').val('');
-  // 1) Cargar detalle de la OC
-  $.getJSON(`/orden_compra/${id}`, oc=>{
-    oc.productos.forEach(p=>{
-      let restante = p.cantidad - (p.cantidad_recibida||0);
-      $('#productos-orden-compra-lista').append(`
-        <tr data-poc-id="${p.id}">
-          <td>${p.id}</td>
-          <td>${p.cantidad}</td>
-          <td>${p.cantidad_recibida||0}</td>
-          <td>${restante}</td>
+  $.getJSON(`/orden_compra/${id}`, oc => {
+    $('#detalle-observaciones').text(oc.observaciones);
+    const $tb = $('#productos-orden-compra-lista').empty();
+    oc.productos.forEach(p => {
+      const porRecibir = p.cantidad_ordenada - p.cantidad_recibida;
+      const totalLinea = (p.precio_unitario * p.cantidad_ordenada).toFixed(2);
+      $tb.append(`
+        <tr data-poc-id="${p.producto_orden_compra_id}" data-max="${porRecibir}">
+          <td>${p.nombre_producto}</td>
+          <td>${p.cantidad_ordenada}</td>
+          <td>${p.cantidad_recibida}</td>
+          <td>${porRecibir}</td>
+          <td>${p.precio_unitario.toFixed(2)}</td>
+          <td>${totalLinea}</td>
           <td>
             <input type="number" class="form-control form-control-sm cant-a-incluir"
-                   min="0" max="${restante}" value="${restante}">
+                   value="${porRecibir}" min="0" max="${porRecibir}">
           </td>
         </tr>`);
     });
-    // 2) Listar guías existentes
-    $.getJSON(`/orden_compra/${id}/guias_remision`, guias=>{
-      guias.forEach(g=>{
-        $('#lista-guias-compra').append(`
-          <tr>
-            <td>${g.numero_guia}</td>
-            <td>${g.fecha_emision.split('T')[0]}</td>
-            <td>${g.estado}</td>
-            <td>
-              <button class="btn btn-info btn-sm"
-                      onclick="verDetalleGuiaCompra(${g.id})">Ver</button>
-            </td>
-          </tr>`);
-      });
-    });
+    listarGuiasCompra(id);
     $('#detalleOCModal').modal('show');
+  }).fail(() => alert('Error al obtener detalles de la orden.'));
+}
+
+// 2.1) Listar guías
+function listarGuiasCompra(ocId) {
+  $.getJSON(`/orden_compra/${ocId}/guias_remision`, guias => {
+    const $tb = $('#guias-compra-lista').empty();
+    guias.forEach(g => {
+      $tb.append(`
+        <tr>
+          <td>${g.numero_guia}</td>
+          <td>${g.fecha_emision}</td>
+          <td>${badgeEstado(g.estado)}</td>
+          <td>
+            <button class="btn btn-sm btn-secondary" onclick="verDetalleGuiaCompra(${g.id})">
+              Ver/Editar
+            </button>
+          </td>
+        </tr>`);
+    });
   });
 }
 
-// 3) Generar nueva Guía de Remisión de Compra
-function generarGuiaCompra(){
-  let numero = $('#numeroGuiaCompra').val().trim();
-  if(!numero) return alert('Ingresa número de guía');
-  // Recoger sólo las cantidades > 0
+// 3) Generar nueva Guía desde la OC abierta
+function generarGuiaCompra() {
+  const numero = $('#numeroGuiaCompra').val().trim();
+  if (!numero) return alert('Ingresa número de Guía.');
+
   const lineas = [];
-  $('#productos-orden-compra-lista tr').each(function(){
-    const poc_id = $(this).data('poc-id');
-    const cant   = parseInt($(this).find('.cant-a-incluir').val())||0;
-    if(cant>0) lineas.push({
-      producto_orden_compra_id: poc_id,
-      cantidad: cant
-    });
+  $('#productos-orden-compra-lista tr').each(function () {
+    const pocId = $(this).data('poc-id');
+    const max = parseInt($(this).data('max'), 10);
+    const cant = parseInt($(this).find('.cant-a-incluir').val(), 10) || 0;
+
+    if (cant < 0 || cant > max) {
+      alert(`Cantidad inválida para POC ${pocId}. Debe estar entre 0 y ${max}.`);
+      return false;
+    }
+    if (cant > 0) {
+      lineas.push({ producto_orden_compra_id: pocId, cantidad_recibida: cant });
+    }
   });
-  if(lineas.length===0) return alert('Selecciona al menos una cantidad');
+
+  if (lineas.length === 0) {
+    return alert('Selecciona al menos una cantidad para incluir en la Guía.');
+  }
 
   $.ajax({
     url: `/orden_compra/${currentOC}/guias_remision`,
-    method:'POST',
-    contentType:'application/json',
-    data: JSON.stringify({
-      numero_guia: numero,
-      productos: lineas
-    }),
-    success(res){
+    method: 'POST',
+    contentType: 'application/json',
+    data: JSON.stringify({ numero_guia: numero, productos: lineas }),
+    success(res) {
       alert(res.mensaje);
       verDetalleOC(currentOC);
     },
-    error(xhr){
-      alert(xhr.responseJSON.error || 'Error creando guía');
+    error(xhr) {
+      console.error('Error creando guía', xhr);
+      alert(xhr.responseJSON?.error || 'Error creando la Guía de Remisión.');
     }
   });
 }
 
-// 4) Ver/Editar detalle de una guía ya creada
+// 4) Ver/editar una Guía existente
+let modalAnterior = null;
 function verDetalleGuiaCompra(idGC){
   modalAnterior = '#detalleOCModal';
   $(modalAnterior).modal('hide');
   $('#gc-productos-lista').empty();
-  $.getJSON(`/guia_remision_compra/${idGC}`, gc=>{
+  $.getJSON(`/guia_remision_compra/${idGC}`, gc => {
     $('#detalleGCModal').data('gcId', idGC);
-    gc.productos.forEach(p=>{
+    gc.productos.forEach(p => {
+      const maxRecibir = p.cantidad_ordenada - p.cantidad_recibida;
       $('#gc-productos-lista').append(`
         <tr data-pid="${p.producto_orden_compra_id}">
-          <td>${p.producto_orden_compra_id}</td>
-          <td><input type="number" class="form-control form-control-sm"
-                     value="${p.cantidad_recibida}" min="0"></td>
-          <td>${p.estado}</td>
+          <td>${p.nombre_producto}</td>
+          <td>${p.cantidad_ordenada}</td>
+          <td><input type="number" class="form-control form-control-sm cantidad-recibida-input"
+                     value="${p.cantidad_recibida}" min="0" max="${maxRecibir}"></td>
+          <td><span class="badge ${badgeForEstado(o.estado)}">${o.estado}</span></td>
         </tr>`);
     });
     $('#gc-estado').val(gc.estado);
@@ -127,34 +160,49 @@ function verDetalleGuiaCompra(idGC){
     $('#detalleGCModal').modal('show');
   });
 }
-
-// 5) Guardar cambios de Guía de Remisión de Compra
-function guardarCambiosGC(){
+// 5) Guardar cambios en la Guía abierta
+function guardarCambiosGC() {
   const idGC = $('#detalleGCModal').data('gcId');
   const estado = $('#gc-estado').val();
-  const comentario = $('#gc-comentario').val();
+  const comentario = $('#gc-comentario').val().trim();
   const detalles = [];
-  $('#gc-productos-lista tr').each(function(){
-    detalles.push({
-      producto_orden_compra_id: $(this).data('pid'),
-      cantidad_recibida: parseInt($(this).find('input').val())||0
-    });
+
+  let error = false;
+  $('#gc-productos-lista tr').each(function () {
+    const pid = $(this).data('pid');
+    const max = parseInt($(this).data('max'), 10);
+    const cant = parseInt($(this).find('.cantidad-recibida-input').val(), 10) || 0;
+
+    if (cant < 0 || cant > max) {
+      alert(`Cantidad inválida para POC ${pid}.`);
+      error = true;
+      return false;  // sale del each
+    }
+    if (cant > 0) detalles.push({ producto_orden_compra_id: pid, cantidad_recibida: cant });
   });
+  if (error) return;
+  if (detalles.length === 0) {
+    return alert('Debes incluir al menos un producto.');
+  }
+
   $.ajax({
     url: `/guia_remision_compra/${idGC}`,
     method: 'PUT',
     contentType: 'application/json',
     data: JSON.stringify({ estado, comentario, detalles }),
-    success(){
+    success() {
       $('#detalleGCModal').modal('hide');
-      $(modalAnterior).modal('show');
       verDetalleOC(currentOC);
     },
-    error(e){ console.error(e); }
+    error(e) {
+      console.error('Error guardando guía', e);
+      alert('No se pudieron guardar los cambios en la Guía.');
+    }
   });
 }
 
+// control_orden_compra.js
 function volverDetalleOC(){
   $('#detalleGCModal').modal('hide');
-  $(modalAnterior).modal('show');
+  $('#detalleOCModal').modal('show');
 }

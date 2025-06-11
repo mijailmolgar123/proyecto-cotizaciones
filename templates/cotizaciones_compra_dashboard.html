@@ -29,14 +29,24 @@
         <div class="col-md-6">
             <h4>Crear Cotización para Compra</h4>
             <form id="form-cotizacion-compra">
-                <!-- ... Dentro de la sección derecha ... -->
+                <!-- Proveedor con autocomplete -->
                 <div class="form-group">
-                    <label for="proveedor">Proveedor:</label>
-                    <input type="text" class="form-control" id="proveedor" required>
-                </div>
-                <div class="form-group">
-                    <label for="ruc_proveedor">RUC del Proveedor:</label>
-                    <input type="text" class="form-control" id="ruc_proveedor">
+                    <label for="proveedor-busqueda">Proveedor:</label>
+                    <div class="input-group">
+                        <input type="text" id="proveedor-busqueda" class="form-control"
+                            placeholder="Busca nombre o RUC…" autocomplete="off" required>
+                        <input type="hidden" id="proveedor-id" name="proveedor_id">
+                        <div class="input-group-append">
+                            <button type="button" class="btn btn-outline-secondary" id="btn-cambiar-proveedor"
+                                style="display:none" title="Cambiar Proveedor">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="btn-nuevo-proveedor"
+                                title="Nuevo Proveedor">
+                                <i class="fas fa-plus-circle"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="forma_pago">Forma de Pago:</label>
@@ -50,13 +60,11 @@
                     <label for="validez_dias">Validez (días):</label>
                     <input type="number" class="form-control" id="validez_dias">
                 </div>
-                
-                <!-- Añade el nuevo campo para plazo de entrega general de la cotización -->
                 <div class="form-group">
                     <label for="plazo_entrega_dias">Plazo de Entrega (días):</label>
                     <input type="number" class="form-control" id="plazo_entrega_dias">
                 </div>
-                
+
                 <h5>Ítems de esta Cotización</h5>
                 <table class="table table-striped">
                     <thead>
@@ -64,7 +72,6 @@
                             <th>Producto</th>
                             <th>Cantidad</th>
                             <th>Precio Ofrecido</th>
-                            <!-- Quitamos la columna de "Fecha Entrega" -->
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -72,7 +79,38 @@
                         <!-- Items que se añaden -->
                     </tbody>
                 </table>
-                <button type="button" class="btn btn-success" onclick="guardarCotizacionCompra()">Guardar Cotización</button>
+                <button type="button" class="btn btn-success" onclick="guardarCotizacionCompra()">Guardar
+                    Cotización</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo Proveedor -->
+<div class="modal fade" id="modalProveedor" tabindex="-1" role="dialog" aria-labelledby="modalProveedorLabel"
+    aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalProveedorLabel">Crear Proveedor</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="nuevo-prov-nombre">Nombre:</label>
+                    <input type="text" id="nuevo-prov-nombre" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="nuevo-prov-ruc">RUC:</label>
+                    <input type="text" id="nuevo-prov-ruc" class="form-control">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="guardar-nuevo-proveedor">Guardar Proveedor</button>
+            </div>
         </div>
     </div>
 </div>

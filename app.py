@@ -5,8 +5,7 @@ from sqlalchemy.orm import Session
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
 import os
-from flask import request, jsonify
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import boto3
@@ -15,7 +14,6 @@ from sqlalchemy import func, text, or_
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from math import ceil
 from sqlalchemy.orm import joinedload
-from flask import Flask, request, jsonify, send_file
 from flask_login import login_required, current_user
 from generate_excel import generate_excel_file
 from datetime import datetime, timezone
@@ -132,7 +130,6 @@ class Cliente(db.Model):
 
     # Para relación “1 cliente → varios contactos” (opcional)
     contactos = db.relationship('Contacto', backref='cliente', lazy=True)
-
 
 class Contacto(db.Model):
     __tablename__ = 'contacto'
@@ -369,6 +366,7 @@ class ProductoOrdenCompra(db.Model):
     precio_unitario = db.Column(db.Float, nullable=False, default=0)
     cantidad = db.Column(db.Integer, nullable=False, default=1)
     estado = db.Column(db.String(20), default='Pendiente')
+    item_deseo = db.relationship('ItemDeseo', backref='productos_ordenados', lazy=True)
 
 class GuiaRemisionCompra(db.Model):
     __tablename__ = 'guia_remision_compra'
@@ -834,7 +832,6 @@ def descargar_excel(cot_id):
         as_attachment=True,
         download_name=f"Cotizacion_{cot_id}.xlsx"
     )
-
 
 @app.route('/clientes', methods=['GET'])
 @login_required
@@ -1513,21 +1510,30 @@ def obtener_guias_por_orden(orden_id):
         for guia in guias
     ])
 
+
+# ETAPA DE COMPRA
 @app.route('/lista_deseos', methods=['POST'])
 @login_required
 def crear_lista_deseos():
-    data = request.get_json()
+    data = request.get_json() or {}
+    # Debe venir cliente_id, no nombre
+    cliente_id = data.get('cliente_id')
+    if not cliente_id:
+        return jsonify({'mensaje': 'Falta el cliente_id'}), 400
+
     nueva_lista = ListaDeseos(
-        cliente=data['cliente'],
-        ruc=data.get('ruc', ''),
-        creado_por=current_user.id,
-        prioridad=data.get('prioridad', 'Normal'),
-        comentario=data.get('comentario', ''),
-        # estado se queda en 'Abierto' por defecto
+        cliente_id = cliente_id,
+        creado_por = current_user.id,
+        prioridad  = data.get('prioridad', 'Normal'),
+        comentario = data.get('comentario', '')
     )
     db.session.add(nueva_lista)
     db.session.commit()
-    return jsonify({'mensaje': 'Lista de Deseos creada', 'id': nueva_lista.id}), 201
+
+    return jsonify({
+      'mensaje': 'Lista de Deseos creada',
+      'id':       nueva_lista.id
+    }), 201
 
 @app.route('/lista_deseos/<int:lista_id>', methods=['GET'])
 @login_required
@@ -1535,363 +1541,334 @@ def obtener_lista_deseos(lista_id):
     lista = db.session.get(ListaDeseos, lista_id)
     if not lista:
         return jsonify({'error': 'No existe esta lista'}), 404
-    
+
+    # Serializar items...
     items_data = []
     for item in lista.items:
         if item.producto:
-            # Si hay producto real
-            items_data.append({
-                'id': item.id,
-                'producto_id': item.producto_id,
-                'nombre': item.producto.nombre,
-                'cantidad_necesaria': item.cantidad_necesaria,
-                'precio_referencia': item.precio_referencia,
-                'estado_item': item.estado_item
-            })
+            nombre = item.producto.nombre
+            stock  = item.producto.stock
         else:
-            # Pre-producto
-            items_data.append({
-                'id': item.id,
-                'producto_id': None,
-                'nombre': item.nombre_preproducto,
-                'cantidad_necesaria': item.cantidad_necesaria,
-                'precio_referencia': item.precio_referencia,
-                'estado_item': item.estado_item
-            })
-    
-    lista_data = {
-        'id': lista.id,
-        'cliente': lista.cliente,
-        'ruc': lista.ruc,
+            nombre = item.nombre_preproducto
+            stock  = None
+        items_data.append({
+            'id':                item.id,
+            'producto_id':       item.producto_id,
+            'nombre':            nombre,
+            'cantidad_necesaria':item.cantidad_necesaria,
+            'precio_referencia': item.precio_referencia,
+            'estado_item':       item.estado_item
+        })
+
+    return jsonify({
+        'id':             lista.id,
+        'cliente':        lista.cliente.nombre,         # nombre real
         'fecha_creacion': lista.fecha_creacion.isoformat(),
-        'prioridad': lista.prioridad,
-        'comentario': lista.comentario,
-        'estado': lista.estado,
-        'items': items_data
-    }
-    return jsonify(lista_data), 200
+        'prioridad':      lista.prioridad,
+        'comentario':     lista.comentario,
+        'estado':         lista.estado,
+        'items':          items_data
+    }), 200
 
 @app.route('/lista_deseos/crear_con_items', methods=['POST'])
 @login_required
 def crear_lista_deseos_con_items():
-    data = request.json
+    data = request.get_json() or {}
+    cliente_id = data.get('cliente_id')
+    if not cliente_id:
+        return jsonify({'mensaje':'Falta el cliente_id'}), 400
 
-    # 1) Crear la lista de deseos
-    nueva_lista = ListaDeseos(
-        cliente=data['cliente'],
-        ruc=data.get('ruc', ''),
-        prioridad=data.get('prioridad', 'Normal'),
-        creado_por=current_user.id
+    lista = ListaDeseos(
+        cliente_id  = cliente_id,
+        creado_por  = current_user.id,
+        prioridad   = data.get('prioridad','Normal'),
+        comentario  = data.get('comentario','')
     )
-    db.session.add(nueva_lista)
-    db.session.commit()  # Para obtener nueva_lista.id
-
-    # 2) Recorrer los items
-    for item in data.get('items', []):
-        producto_id = item.get('producto_id')  # puede ser None si no existía
-        nombre_pre = item.get('nombre_preproducto')  # si es un pre-producto
-        cantidad = item.get('cantidad_necesaria', 1)
-        precio_ref = item.get('precio_referencia', 0.0)
-
-        nuevo_item = ItemDeseo(
-            lista_deseos_id=nueva_lista.id,
-            producto_id=producto_id,  # si es None, quedará null
-            nombre_preproducto=nombre_pre,
-            cantidad_necesaria=cantidad,
-            precio_referencia=precio_ref
-        )
-        db.session.add(nuevo_item)
-
+    db.session.add(lista)
     db.session.commit()
 
+    for it in data.get('items', []):
+        nuevo = ItemDeseo(
+            lista_deseos_id      = lista.id,
+            producto_id          = it.get('producto_id'),
+            nombre_preproducto   = it.get('nombre_preproducto'),
+            cantidad_necesaria   = it.get('cantidad_necesaria',1),
+            precio_referencia    = it.get('precio_referencia',0.0)
+        )
+        db.session.add(nuevo)
+
+    db.session.commit()
     return jsonify({
-       'mensaje': 'Lista de deseos creada con éxito',
-       'lista_deseos_id': nueva_lista.id
+        'mensaje': 'Lista de deseos creada con éxito',
+        'lista_deseos_id': lista.id
     }), 201
 
 @app.route('/items_deseo_pendientes', methods=['GET'])
 @login_required
 def items_deseo_pendientes():
-    """
-    Devuelve un JSON con los items de deseo que estén en estado 'Pendiente' o 'Abierto'.
-    Incluye el ID de la lista, el nombre del cliente y la info del item (id, producto, etc.).
-    """
-    # Ejemplo sencillo: buscar ItemDeseo con estado='Pendiente'
-    pendientes = (db.session.query(ItemDeseo)
-                  .join(ListaDeseos, ListaDeseos.id == ItemDeseo.lista_deseos_id)
-                  .all())
-    #.filter(ListaDeseos.estado == 'Pendiente')
-    data = []
-    for item in pendientes:
-        # Podrías agrupar por lista o devolver un array plano
-        lista = item.lista_deseos
-        # Nombre de producto
-        nombre_prod = None
-        stock_disp = 0
-        if item.producto_id and item.producto:
-            nombre_prod = item.producto.nombre
-            stock_disp = item.producto.stock
-        elif item.nombre_preproducto:
-            nombre_prod = item.nombre_preproducto
+    pendientes = db.session.query(ItemDeseo).join(ListaDeseos).filter(
+        ListaDeseos.estado=='Abierto'
+    ).all()
 
-        data.append({
-            'item_deseo_id': item.id,
-            'lista_id': lista.id,
-            'cliente': lista.cliente,
-            'nombre_lista': f"Lista #{lista.id} - {lista.cliente}",
-            'nombre_producto': nombre_prod,
-            'stock_disponible': stock_disp,
-            'cantidad_necesaria': item.cantidad_necesaria,
+    out = []
+    for item in pendientes:
+        lista  = item.lista_deseos
+        cliente_nombre = lista.cliente.nombre
+        if item.producto:
+            nombre = item.producto.nombre
+            stock  = item.producto.stock
+        else:
+            nombre = item.nombre_preproducto
+            stock  = None
+
+        out.append({
+            'item_deseo_id':     item.id,
+            'lista_id':          lista.id,
+            'cliente':           cliente_nombre,
+            'nombre_lista':      f"Lista #{lista.id} – {cliente_nombre}",
+            'nombre_producto':   nombre,
+            'stock_disponible':  stock,
+            'cantidad_necesaria':item.cantidad_necesaria,
             'precio_referencia': item.precio_referencia
         })
-    return jsonify(data), 200
+
+    return jsonify(out), 200
 
 @app.route('/cotizacion_compra/crear_con_items', methods=['POST'])
 @login_required
 def crear_cotizacion_compra():
-    data = request.get_json()
+    data = request.get_json() or {}
+    prov_id = data.get('proveedor_id')
+    if not prov_id:
+        return jsonify({'error': 'Falta el proveedor'}), 400
+
+    # 1) Cabecera
     nueva_cot = CotizacionCompra(
-        proveedor=data['proveedor'],
-        ruc_proveedor=data.get('ruc_proveedor', ''),
-        forma_pago=data.get('forma_pago', ''),
-        fecha_oferta=data.get('fecha_oferta'),  # si es un YYYY-MM-DD string
-        validez_dias=data.get('validez_dias'),
-        creado_por=current_user.id,
-        # nuevo campo
-        plazo_entrega_dias=data.get('plazo_entrega_dias')
-        # por ej. lo almacenas en la columna "plazo_entrega_dias"
+        proveedor_id       = prov_id,
+        forma_pago         = data.get('forma_pago', ''),
+        fecha_oferta       = data.get('fecha_oferta'),    # 'YYYY-MM-DD'
+        validez_dias       = data.get('validez_dias'),
+        plazo_entrega_dias = data.get('plazo_entrega_dias'),
+        creado_por         = current_user.id
     )
     db.session.add(nueva_cot)
-    db.session.commit()
+    db.session.commit()  # para tener nueva_cot.id
 
-    # Insertar los detalles ...
+    # 2) Detalles
     for det in data.get('items', []):
         db.session.add(ProductoCotizacionCompra(
-            cotizacion_compra_id=nueva_cot.id,
-            item_deseo_id=det['item_deseo_id'],
-            precio_ofrecido=det['precio_ofrecido'],
-            cantidad=det['cantidad']
+            cotizacion_compra_id = nueva_cot.id,
+            item_deseo_id        = det['item_deseo_id'],
+            precio_ofrecido      = det['precio_ofrecido'],
+            cantidad             = det['cantidad']
         ))
     db.session.commit()
 
-    return jsonify({'mensaje': 'Cotización de Compra creada', 'id': nueva_cot.id}), 201
+    return jsonify({
+      'mensaje': 'Cotización de Compra creada',
+      'id': nueva_cot.id
+    }), 201
+
+@app.route('/proveedores', methods=['GET'])
+@login_required
+def buscar_proveedores():
+    term = request.args.get('term','').strip()
+    q = Proveedor.query.filter(Proveedor.activo.is_(True))
+    if term:
+        like = f"%{term}%"
+        q = q.filter(
+            or_(
+              Proveedor.nombre.ilike(like),
+              Proveedor.ruc.ilike(like)
+            )
+        )
+    resultados = q.limit(10).all()
+    return jsonify([
+        {'id': p.id, 'nombre': p.nombre, 'ruc': p.ruc}
+        for p in resultados
+    ])
+
+@app.route('/proveedores', methods=['POST'])
+@login_required
+def crear_proveedor():
+    data = request.get_json() or {}
+    nombre = data.get('nombre','').strip()
+    ruc    = data.get('ruc','').strip()
+    if not nombre or not ruc:
+        return jsonify({'mensaje':'Faltan nombre o RUC'}), 400
+    # opcional: validar unicidad
+    p = Proveedor(nombre=nombre, ruc=ruc)
+    db.session.add(p)
+    db.session.commit()
+    return jsonify({'id': p.id, 'nombre': p.nombre, 'ruc': p.ruc}), 201
 
 @app.route('/cotizaciones_compra_pendientes', methods=['GET'])
 @login_required
 def cotizaciones_compra_pendientes():
-    """
-    Devuelve todas las cotizaciones de compra que no estén 'Cerradas', 'Rechazadas'
-    ni 'Procesada' ni 'Procesada Parcial'.
-    """
-    # Agrega "Procesada Parcial" en la lista
     cotizaciones = CotizacionCompra.query.filter(
-        CotizacionCompra.estado.notin_([
-            "Procesada", "Cerrada", "Rechazada", "Procesada Parcial"
-        ])
+        CotizacionCompra.estado.notin_(["Procesada","Cerrada","Rechazada"])
     ).all()
 
     data = []
     for c in cotizaciones:
-        # Solo productos en estado Pendiente
-        productos_pend = [
-            p for p in c.productos_cotizados 
-            if p.estado == 'Pendiente'
-        ]
-        # Si no hay productos pendientes, omite
-        if not productos_pend:
+        pendientes = [p for p in c.productos_cotizados if p.estado=='Pendiente']
+        if not pendientes:
             continue
 
         data.append({
-            'cotizacion_id': c.id,
-            'proveedor': c.proveedor,
-            'ruc_proveedor': c.ruc_proveedor,
-            'estado': c.estado,
+            'cotizacion_id':      c.id,
+            'proveedor':          c.proveedor.nombre,
+            'ruc_proveedor':      c.proveedor.ruc,           # <- aquí
+            'estado':             c.estado,
             'plazo_entrega_dias': c.plazo_entrega_dias,
-            'fecha_oferta': str(c.fecha_oferta) if c.fecha_oferta else None,
-            'forma_pago': c.forma_pago,
+            'forma_pago':         c.forma_pago,
+            'fecha_oferta':       c.fecha_oferta.isoformat() if c.fecha_oferta else None,
+            'validez_dias':       c.validez_dias,
             'productos': [
                 {
-                    'id_detalle': p.id,
-                    'item_deseo_id': p.item_deseo_id,
-                    'nombre_producto': p.item_deseo.producto.nombre 
-                        if p.item_deseo.producto else p.item_deseo.nombre_preproducto,
-                    'precio_ofrecido': p.precio_ofrecido,
-                    'cantidad': p.cantidad
-                } 
-                for p in productos_pend
+                  'id_detalle':      p.id,
+                  'item_deseo_id':   p.item_deseo_id,
+                  'nombre_producto': (p.item_deseo.producto.nombre
+                                      if p.item_deseo.producto
+                                      else p.item_deseo.nombre_preproducto),
+                  'precio_ofrecido': p.precio_ofrecido,
+                  'cantidad':        p.cantidad
+                }
+                for p in pendientes
             ]
         })
 
     return jsonify(data), 200
 
+from datetime import datetime
+
 @app.route('/orden_compra/crear_desde_cotizacion', methods=['POST'])
 @login_required
 def crear_orden_compra_desde_cotizacion():
-    data = request.json
-    cotizacion_id = data.get('cotizacion_compra_id')
-    productos = data.get('productos', []) 
+    data = request.get_json() or {}
+    cot_id    = data.get('cotizacion_compra_id')
+    productos = data.get('productos', [])
+    nro       = data.get('numero_orden', '').strip()
+    fecha_str = data.get('fecha_orden', '').strip()
+    obs       = data.get('observaciones', '').strip()
 
-    if not cotizacion_id or not productos:
+    if not cot_id or not productos or not nro or not fecha_str:
         return jsonify({'error': 'Faltan datos obligatorios'}), 400
 
-    cotizacion_compra = db.session.get(CotizacionCompra, cotizacion_id)
-    if not cotizacion_compra:
+    cot = db.session.get(CotizacionCompra, cot_id)
+    if not cot:
         return jsonify({'error': 'Cotización de compra no encontrada'}), 404
 
+    # Parseamos la fecha desde string a date
+    try:
+        fecha_orden = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Formato de fecha inválido'}), 400
+
+    # Creamos la cabecera usando la FK proveedor_id
     nueva_orden = OrdenCompra(
-        cotizacion_compra_id=cotizacion_compra.id, 
-        numero_orden=data['numero_orden'],
-        fecha_orden=data['fecha_orden'],
-        observaciones=data.get('observaciones', ''),
-        proveedor=cotizacion_compra.proveedor,
-        estado='Pendiente',
-        creado_por=current_user.id
+        cotizacion_compra_id = cot.id,
+        numero_orden         = nro,
+        fecha_orden          = fecha_orden,
+        observaciones        = obs,
+        proveedor_id         = cot.proveedor_id,    # <— FK
+        estado               = 'Pendiente',
+        creado_por           = current_user.id
     )
     db.session.add(nueva_orden)
-    db.session.commit()
+    db.session.commit()  # para tener nueva_orden.id
 
-    ids_seleccionados = [p['id_detalle'] for p in productos]
-    detalles_procesados = []
-
-    for id_det in ids_seleccionados:
-        detalle = db.session.get(ProductoCotizacionCompra, id_det)
-        if not detalle:
+    # Detalles
+    for det in productos:
+        detalle = db.session.get(ProductoCotizacionCompra, det['id_detalle'])
+        if not detalle or detalle.estado != 'Pendiente':
             continue
-
         detalle.estado = 'Comprado'
         detalle.item_deseo.estado = 'Ordenado'
-        detalles_procesados.append(detalle)
 
-        nuevo_producto_orden = ProductoOrdenCompra(
-            orden_compra_id=nueva_orden.id,
-            cotizacion_compra_item_id=detalle.id,
-            item_deseo_id=detalle.item_deseo_id,
-            precio_unitario=detalle.precio_ofrecido,
-            cantidad=detalle.cantidad
+        nuevo = ProductoOrdenCompra(
+            orden_compra_id           = nueva_orden.id,
+            cotizacion_compra_item_id = detalle.id,
+            item_deseo_id             = detalle.item_deseo_id,
+            precio_unitario           = detalle.precio_ofrecido,
+            cantidad                  = detalle.cantidad
         )
-        db.session.add(nuevo_producto_orden)
+        db.session.add(nuevo)
 
-        # Buscar otros detalles con mismo item_deseo_id (excepto el actual) y marcar como DESCARTADO
-        otros = ProductoCotizacionCompra.query.filter(
+        # descartamos las demás ofertas para el mismo item_deseo
+        ProductoCotizacionCompra.query.filter(
             ProductoCotizacionCompra.item_deseo_id == detalle.item_deseo_id,
             ProductoCotizacionCompra.id != detalle.id,
             ProductoCotizacionCompra.estado == 'Pendiente'
-        ).all()
-
-        for otro in otros:
-            otro.estado = 'Descartado'
+        ).update({ 'estado': 'Descartado' }, synchronize_session=False)
 
     db.session.commit()
 
-    # Verifica si todas las líneas de esta cotización están 'Comprado' o 'Descartado'
-    estados_lineas = [p.estado for p in cotizacion_compra.productos_cotizados]
-    if all(e in ['Comprado', 'Descartado'] for e in estados_lineas):
-        cotizacion_compra.estado = 'Cerrada'
-    elif any(e == 'Comprado' for e in estados_lineas):
-        cotizacion_compra.estado = 'Procesada Parcial'
+    # Actualizar estado de la cotización de compra
+    estados = [p.estado for p in cot.productos_cotizados]
+    if all(e in ['Comprado','Descartado'] for e in estados):
+        cot.estado = 'Cerrada'
+    elif any(e == 'Comprado' for e in estados):
+        cot.estado = 'Procesada Parcial'
     else:
-        cotizacion_compra.estado = 'Abierto'
-
+        cot.estado = 'Abierto'
     db.session.commit()
 
-    return jsonify({'mensaje': 'Orden de Compra creada satisfactoriamente', 'orden_id': nueva_orden.id}), 201
+    return jsonify({
+        'mensaje':  'Orden de Compra creada satisfactoriamente',
+        'orden_id': nueva_orden.id
+    }), 201
 
 @app.route('/cotizaciones_compra_buscar', methods=['GET'])
 @login_required
 def cotizaciones_compra_buscar():
-    """
-    Devuelve las Cotizaciones de Compra y sus productos que coincidan con el término de búsqueda 
-    en el nombre del producto (item_deseo.producto.nombre o item_deseo.nombre_preproducto).
-    Si no se envía 'termino', devuelve todas las cotizaciones en estado no procesado.
-    """
-    termino = request.args.get('termino', '').strip().lower()
+    termino = request.args.get('termino','').strip().lower()
+    todas = CotizacionCompra.query.filter(
+        CotizacionCompra.estado.notin_(["Procesada","Cerrada","Rechazada"])
+    ).all()
 
-    # 1. Buscar todas las cotizaciones 'pendientes' o 'abiertas'
-    query = CotizacionCompra.query.filter(
-        CotizacionCompra.estado.notin_(["Procesada", "Cerrada", "Rechazada"])
-    )
-    cotizaciones = query.all()
-
-    # 2. Si no hay término, devolvemos directamente TODAS las cotizaciones pendientes
+    # si no hay término, devolvemos todas
     if not termino:
-        # Construimos la respuesta con TODOS sus productos
-        data = []
-        for c in cotizaciones:
-            productos_json = []
-            for p in c.productos_cotizados:
-                # Obtener nombre
-                if p.estado == 'Descartado':
-                    continue
-                if p.item_deseo.producto:
-                    nombre_prod = p.item_deseo.producto.nombre
-                else:
-                    nombre_prod = p.item_deseo.nombre_preproducto or "Producto sin nombre"
+        return jsonify([
+          { **c } for c in cotizaciones_compra_pendientes().json
+        ]), 200
 
-                productos_json.append({
-                    'id_detalle': p.id,
-                    'nombre_producto': nombre_prod,
-                    'precio_ofrecido': p.precio_ofrecido,
-                    'cantidad': p.cantidad
-                })
-            
-            data.append({
-                'cotizacion_id': c.id,
-                'proveedor': c.proveedor,
-                'estado': c.estado,
-                'plazo_entrega_dias': c.plazo_entrega_dias,
-                'productos': productos_json
-            })
-        
-        return jsonify(data), 200
-    
-    # 3. Si SÍ hay término, filtramos manualmente en cada cotización
-    cotizaciones_filtradas = []
-    for c in cotizaciones:
-        productos_match = []
+    # filtrar por producto
+    filtradas = []
+    for c in todas:
+        match = []
         for p in c.productos_cotizados:
-            # Obtener el nombre
-            if p.item_deseo.producto:
-                nombre_prod = p.item_deseo.producto.nombre.lower()
-            elif p.item_deseo.nombre_preproducto:
-                nombre_prod = p.item_deseo.nombre_preproducto.lower()
-            else:
-                nombre_prod = ""
+            nombre = (
+                p.item_deseo.producto.nombre.lower()
+                if p.item_deseo.producto else
+                (p.item_deseo.nombre_preproducto or '').lower()
+            )
+            # usa and e in en Python
+            if termino and termino in nombre and p.estado == 'Pendiente':
+                match.append(p)
 
-            # Ver si el término aparece en el nombre
-            if nombre_prod and (termino in nombre_prod):
-                productos_match.append(p)
-
-        # Si hubo coincidencias, añadimos la cotización y SOLO esos productos al resultado,
-        # sin alterar c.productos_cotizados en el objeto real
-        if productos_match:
-            cotizaciones_filtradas.append((c, productos_match))
-
-    # 4. Construir la respuesta con las coincidencias
-    data = []
-    for (c, matches) in cotizaciones_filtradas:
-        productos_json = []
-        for p in matches:
-            if p.item_deseo.producto:
-                nombre_prod = p.item_deseo.producto.nombre
-            else:
-                nombre_prod = p.item_deseo.nombre_preproducto or "Producto sin nombre"
-            
-            productos_json.append({
-                'id_detalle': p.id,
-                'nombre_producto': nombre_prod,
-                'precio_ofrecido': p.precio_ofrecido,
-                'cantidad': p.cantidad
+        if match:
+            filtradas.append({
+                'cotizacion_id': c.id,
+                'proveedor':     c.proveedor,
+                'ruc_proveedor': c.ruc_proveedor,
+                'estado':        c.estado,
+                'plazo_entrega_dias': c.plazo_entrega_dias,
+                'forma_pago':    c.forma_pago,
+                'fecha_oferta':  c.fecha_oferta.isoformat() if c.fecha_oferta else None,
+                'validez_dias':  c.validez_dias,
+                'productos': [
+                    {
+                        'id_detalle':      p.id,
+                        'item_deseo_id':   p.item_deseo_id,
+                        'nombre_producto': p.item_deseo.producto.nombre if p.item_deseo.producto else p.item_deseo.nombre_preproducto,
+                        'precio_ofrecido': p.precio_ofrecido,
+                        'cantidad':        p.cantidad
+                    }
+                    for p in match
+                ]
             })
-        
-        data.append({
-            'cotizacion_id': c.id,
-            'proveedor': c.proveedor,
-            'estado': c.estado,
-            'plazo_entrega_dias': c.plazo_entrega_dias,
-            'productos': productos_json
-        })
-
-    return jsonify(data), 200
+    return jsonify(filtradas), 200
 
 @app.route('/cotizacion_compra/rechazar/<int:cot_id>', methods=['POST'])
 @login_required
@@ -1906,7 +1883,6 @@ def rechazar_cotizacion_compra(cot_id):
 
     return jsonify({'mensaje': 'Cotización rechazada con éxito'}), 200
 
-# 1) Listar Órdenes de Compra (GET /orden_compra)
 @app.route('/orden_compra', methods=['GET'])
 @login_required
 def listar_ordenes_compra():
@@ -1915,33 +1891,45 @@ def listar_ordenes_compra():
     proveedor = request.args.get('proveedor', type=str)
     estado    = request.args.get('estado',   type=str)
 
-    query = OrdenCompra.query
+    # Base query: unimos con Proveedor para filtrar por nombre
+    query = OrdenCompra.query.join(Proveedor)
     if proveedor:
-        query = query.filter(OrdenCompra.proveedor.ilike(f'%{proveedor}%'))
+        query = query.filter(Proveedor.nombre.ilike(f'%{proveedor}%'))
     if estado:
         query = query.filter(OrdenCompra.estado == estado)
 
-    pag = query.order_by(OrdenCompra.id.desc())\
+    pag = query.order_by(OrdenCompra.id.desc()) \
                .paginate(page=page, per_page=per_page, error_out=False)
 
     ordenes = []
     for oc in pag.items:
         usuario = db.session.get(Usuario, oc.creado_por)
+
+        # Monto total de la orden (suma de líneas)
+        monto = sum(l.precio_unitario * l.cantidad for l in oc.productos)
+        # Días transcurridos desde la fecha de orden
+        dias  = (date.today() - oc.fecha_orden).days
+
         ordenes.append({
-            'id': oc.id,
-            'cotizacion_compra_id': oc.cotizacion_compra_id,
-            'numero_orden': oc.numero_orden,
-            'fecha_orden': oc.fecha_orden.isoformat(),
-            'proveedor': oc.proveedor,
-            'estado': oc.estado,
-            'creado_por': usuario.nombre_usuario if usuario else 'Desconocido'
+            'id':                  oc.id,
+            'cliente':             oc.proveedor.nombre,
+            'ruc_proveedor':       oc.proveedor.ruc,
+            'numero_orden':        oc.numero_orden,
+            'numero_cotizacion':   oc.cotizacion_compra_id,
+            'fecha':               oc.fecha_orden.isoformat(),
+            'monto':               round(monto, 2),
+            'moneda':              'Soles',  # más adelante podrías hacerlo dinámico
+            'estado':              oc.estado,
+            'solicitante':         usuario.nombre_usuario if usuario else 'Desconocido',
+            'tiempo_dias':         dias
         })
+
     return jsonify({
-        'ordenes': ordenes,
+        'ordenes':       ordenes,
         'pagina_actual': pag.page,
-        'paginas': pag.pages,
-        'total': pag.total
-    })
+        'paginas':       pag.pages,
+        'total':         pag.total
+    }), 200
 
 # 2) Detalle de una OC (GET /orden_compra/<id>)
 @app.route('/orden_compra/<int:oc_id>', methods=['GET'])
@@ -1949,35 +1937,44 @@ def listar_ordenes_compra():
 def detalle_orden_compra(oc_id):
     oc = db.session.get(OrdenCompra, oc_id)
     if not oc:
-        return jsonify({'error':'Orden de compra no encontrada'}),404
+        return jsonify({'error': 'Orden de compra no encontrada'}), 404
 
     productos = []
-    for p in oc.productos:
+    for l in oc.productos:
+        # calcula cuánto ya se recibió de esta línea
         recibido = db.session.query(
-            func.coalesce(func.sum(ProductoGuiaRemisionCompra.cantidad_recibida),0)
+            func.coalesce(func.sum(ProductoGuiaRemisionCompra.cantidad_recibida), 0)
         ).join(GuiaRemisionCompra,
                GuiaRemisionCompra.id == ProductoGuiaRemisionCompra.guia_remision_compra_id
         ).filter(
             GuiaRemisionCompra.orden_compra_id == oc_id,
-            ProductoGuiaRemisionCompra.producto_orden_compra_id == p.id
+            ProductoGuiaRemisionCompra.producto_orden_compra_id == l.id
         ).scalar() or 0
 
+        # nombre real del producto
+        if hasattr(l, 'item_deseo') and l.item_deseo and l.item_deseo.producto:
+            nombre = l.item_deseo.producto.nombre
+        else:
+            nombre = getattr(l, 'nombre_preproducto', f"P.O.C. ID {l.id}")
+
         productos.append({
-            'id': p.id,
-            'producto_orden_compra_id': p.id,
-            'cantidad': p.cantidad,
-            'precio_unitario': p.precio_unitario,
-            'cantidad_recibida': recibido
+            'producto_orden_compra_id': l.id,
+            'nombre_producto':          nombre,
+            'cantidad_ordenada':        l.cantidad,
+            'cantidad_recibida':        recibido,
+            'precio_unitario':          l.precio_unitario
         })
 
     return jsonify({
-        'id': oc.id,
-        'numero_orden': oc.numero_orden,
-        'fecha_orden': oc.fecha_orden.isoformat(),
-        'proveedor': oc.proveedor,
-        'estado': oc.estado,
-        'productos': productos
-    })
+        'id':             oc.id,
+        'numero_orden':   oc.numero_orden,
+        'fecha_orden':    oc.fecha_orden.isoformat(),
+        'proveedor':      oc.proveedor.nombre,
+        'ruc_proveedor':  oc.proveedor.ruc,
+        'estado':         oc.estado,
+        'observaciones':  oc.observaciones or '',
+        'productos':      productos
+    }), 200
 
 # 3) Listar Guías de Compra de una OC (GET /orden_compra/<id>/guias_remision)
 @app.route('/orden_compra/<int:oc_id>/guias_remision', methods=['GET'])
@@ -1993,6 +1990,21 @@ def listar_guias_compra(oc_id):
         'estado': g.estado
     } for g in guias]
     return jsonify(salida)
+
+def actualizar_estado_orden(oc_id):
+    """Recalcula y persiste el estado de la OC según sus guías."""
+    oc = db.session.get(OrdenCompra, oc_id)
+    if not oc:
+        return
+    guias = GuiaRemisionCompra.query.filter_by(
+        orden_compra_id=oc_id, activo=True
+    ).all()
+    if any(g.estado == 'Emitida' for g in guias):
+        oc.estado = 'En Proceso'
+    if guias and all(g.estado == 'Cerrada' for g in guias):
+        oc.estado = 'Finalizado'
+    db.session.commit()
+
 
 # 4) Crear Guía de Compra (POST /orden_compra/<id>/guias_remision)
 @app.route('/orden_compra/<int:oc_id>/guias_remision', methods=['POST'])
@@ -2044,6 +2056,8 @@ def crear_guia_compra(oc_id):
             cantidad_recibida=l['cantidad']
         ))
     db.session.commit()
+    # 3) Recalcular estado de la orden
+    actualizar_estado_orden(oc_id)
 
     return jsonify({'mensaje':'Guía creada','id':guia.id}),201
 
@@ -2053,22 +2067,37 @@ def crear_guia_compra(oc_id):
 def detalle_guia_compra(gc_id):
     gc = db.session.get(GuiaRemisionCompra, gc_id)
     if not gc:
-        return jsonify({'error':'Guía no encontrada'}),404
+        return jsonify({'error':'Guía no encontrada'}), 404
 
-    productos = [{
-        'producto_orden_compra_id': p.producto_orden_compra_id,
-        'cantidad_recibida': p.cantidad_recibida,
-        'estado': p.estado
-    } for p in gc.productos]
+    productos = []
+    for linea in gc.productos:
+        # 1) Recupero la línea de orden de compra
+        poc = db.session.get(ProductoOrdenCompra, linea.producto_orden_compra_id)
+        # 2) Nombre real (sea producto o pre-producto)
+        if poc.item_deseo.producto:
+            nombre = poc.item_deseo.producto.nombre
+        else:
+            nombre = poc.item_deseo.nombre_preproducto or '—'
+        # 3) Cantidad ordenada y recibida
+        cantidad_ordenada = poc.cantidad
+        cantidad_recibida = linea.cantidad_recibida
+
+        productos.append({
+            'producto_orden_compra_id': linea.producto_orden_compra_id,
+            'nombre_producto':          nombre,
+            'cantidad_ordenada':        cantidad_ordenada,
+            'cantidad_recibida':        cantidad_recibida,
+            'estado':                   linea.estado
+        })
 
     return jsonify({
-        'id': gc.id,
-        'numero_guia': gc.numero_guia,
-        'fecha_emision': gc.fecha_emision.isoformat(),
-        'estado': gc.estado,
-        'comentario': gc.comentario,
-        'productos': productos
-    })
+        'id':           gc.id,
+        'numero_guia':  gc.numero_guia,
+        'fecha_emision':gc.fecha_emision.isoformat(),
+        'estado':       gc.estado,
+        'comentario':   gc.comentario,
+        'productos':    productos
+    }), 200
 
 # 6) Actualizar Guía de Compra (PUT /guia_remision_compra/<id>)
 @app.route('/guia_remision_compra/<int:gc_id>', methods=['PUT'])
@@ -2077,11 +2106,13 @@ def actualizar_guia_compra(gc_id):
     gc   = db.session.get(GuiaRemisionCompra, gc_id)
     data = request.get_json() or {}
     if not gc:
-        return jsonify({'error':'Guía no encontrada'}),404
+        return jsonify({'error': 'Guía no encontrada'}), 404
 
+    # Actualizo estado y comentario
     gc.estado     = data.get('estado', gc.estado)
     gc.comentario = data.get('comentario', gc.comentario)
 
+    # Actualizo cada línea de la guía
     for d in data.get('detalles', []):
         pod = ProductoGuiaRemisionCompra.query.filter_by(
             guia_remision_compra_id=gc_id,
@@ -2090,8 +2121,14 @@ def actualizar_guia_compra(gc_id):
         if pod:
             pod.cantidad_recibida = d['cantidad_recibida']
 
+    # Persisto cambios en la guía
     db.session.commit()
-    return jsonify({'mensaje':'Guía actualizada'}),200
+
+    # **Recalculo y guardo el estado de la OC** asociada
+    if gc.orden_compra_id:
+        actualizar_estado_orden(gc.orden_compra_id)
+
+    return jsonify({'mensaje': 'Guía actualizada'}), 200
 
 # Crear la tabla si no existe
 with app.app_context():
