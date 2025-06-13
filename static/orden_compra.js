@@ -3,31 +3,31 @@ let productosSeleccionados = [];  // items de la cotización actual
 let currentCotizacionId = null;
 let cotizacionesOriginales = [];
 
-document.addEventListener('DOMContentLoaded', function(){
+document.addEventListener('DOMContentLoaded', function () {
     cargarCotizacionesPendientes();
 
     // Manejar el submit del form modal
-    document.getElementById('form-orden-compra').addEventListener('submit', function(e){
+    document.getElementById('form-orden-compra').addEventListener('submit', function (e) {
         e.preventDefault();
         crearOrdenCompra();
     });
-    document.getElementById('buscar-producto').addEventListener('input', function(){
+    document.getElementById('buscar-producto').addEventListener('input', function () {
         let termino = this.value.trim();
         buscarCotizacionesPorProducto(termino);
     });
 
 });
 
-function cargarCotizacionesPendientes(){
+function cargarCotizacionesPendientes() {
     $.ajax({
         url: '/cotizaciones_compra_pendientes',
         method: 'GET',
-        success: function(response){
+        success: function (response) {
             cotizacionesOriginales = response;  // backup sin filtro
             cotizacionesPendientes = [...response]; // copia filtrable
             renderCotizacionesPendientes();
         },
-        error: function(err){
+        error: function (err) {
             console.error("Error al cargar cotizaciones pendientes", err);
         }
     });
@@ -87,17 +87,17 @@ function renderCotizacionesPendientes() {
 
 
 // A simple toggler:
-function toggleDetalle(btn){
+function toggleDetalle(btn) {
     let tr = $(btn).closest('tr');
     let detailRow = tr.next('.detalle');
     detailRow.toggleClass('hidden');
 }
 
 
-function verDetalleCotizacion(cotId){
+function verDetalleCotizacion(cotId) {
     // Buscar la cotizacion
     let coti = cotizacionesOriginales.find(x => x.cotizacion_id === cotId);
-    if(!coti){
+    if (!coti) {
         alert("Cotización no encontrada.");
         return;
     }
@@ -122,8 +122,8 @@ function verDetalleCotizacion(cotId){
     });
 }
 
-function mostrarModalOrdenCompra(){
-    if(!currentCotizacionId){
+function mostrarModalOrdenCompra() {
+    if (!currentCotizacionId) {
         alert("Primero seleccione una cotización de compra.");
         return;
     }
@@ -134,38 +134,34 @@ function mostrarModalOrdenCompra(){
     $('#modalOrdenCompra').modal('show');
 }
 
-function crearOrdenCompra(){
-    let cotId = $('#cotizacion_compra_id').val();
-    let numeroOrden = $('#numero_orden').val().trim();
-    let fechaOrden = $('#fecha_orden').val();
-    let obs = $('#observaciones').val().trim();
+function crearOrdenCompra() {
+    const cotId = $('#cotizacion_compra_id').val();
+    const numeroOrden = $('#numero_orden').val().trim();
+    const fechaOrden = $('#fecha_orden').val();
+    const obs = $('#observaciones').val().trim();
 
-    if(!numeroOrden){
-        alert("Debe ingresar el número de orden.");
-        return;
+    if (!numeroOrden) {
+        return alert("Debe ingresar el número de orden.");
     }
-    if(!fechaOrden){
-        alert("Debe ingresar la fecha de orden.");
-        return;
+    if (!fechaOrden) {
+        return alert("Debe ingresar la fecha de orden.");
     }
 
-    // Recoger los productos seleccionados
-    let seleccion = [];
-    $('#productos-cotizacion-lista tr').each(function(){
-        let check = $(this).find('.sel-prod');
-        if(check && check.is(':checked')){
-            let idDetalle = check.data('id');
-            seleccion.push({ id_detalle: idDetalle });
+    // Recoger productos seleccionados
+    const seleccion = [];
+    $('#productos-cotizacion-lista tr').each(function () {
+        const chk = $(this).find('.sel-prod');
+        if (chk.length && chk.is(':checked')) {
+            seleccion.push({ id_detalle: chk.data('id') });
         }
     });
 
-    if(seleccion.length === 0){
-        alert("No se seleccionó ningún producto para la orden.");
-        return;
+    if (seleccion.length === 0) {
+        return alert("No se seleccionó ningún producto para la orden.");
     }
 
-    let dataOrden = {
-        cotizacion_compra_id: parseInt(cotId),
+    const dataOrden = {
+        cotizacion_compra_id: parseInt(cotId, 10),
         numero_orden: numeroOrden,
         fecha_orden: fechaOrden,
         observaciones: obs,
@@ -177,25 +173,27 @@ function crearOrdenCompra(){
         method: 'POST',
         contentType: 'application/json',
         data: JSON.stringify(dataOrden),
-        success: function(resp){
+        success: function (resp) {
             alert(resp.mensaje);
-            // Cerrar modal
+            // 1) cerramos modal
             $('#modalOrdenCompra').modal('hide');
-            // Quitar la cotización ya procesada de la vista
-            cotizacionesPendientes = cotizacionesPendientes.filter(x => x.cotizacion_id != cotId);
+            // 2) quitamos la cotización de la lista pendiente y recargamos
+            cotizacionesPendientes = cotizacionesPendientes
+                .filter(x => x.cotizacion_id != cotId);
             cargarCotizacionesPendientes();
-            // Limpiar la derecha
+            // 3) limpiamos el área derecha
             $('#productos-cotizacion-lista').empty();
             currentCotizacionId = null;
         },
-        error: function(err){
+        error: function (err) {
             console.error("Error al crear la Orden de Compra", err);
-            alert("Error al crear la Orden de Compra.");
+            alert(err.responseJSON?.error || "Error al crear la Orden de Compra.");
         }
     });
 }
 
-function buscarCotizacionesPorProducto(termino){
+
+function buscarCotizacionesPorProducto(termino) {
     if (!termino) {
         // Si está vacío, muestra todo desde el backup
         cotizacionesPendientes = [...cotizacionesOriginales];
@@ -230,13 +228,13 @@ function rechazarCotizacionCompra(cotId) {
     $.ajax({
         url: `/cotizacion_compra/rechazar/${cotId}`,
         method: 'POST',
-        success: function(resp) {
+        success: function (resp) {
             alert(resp.mensaje);
             // Remover la cotización rechazada de cotizacionesPendientes:
             cotizacionesPendientes = cotizacionesPendientes.filter(x => x.cotizacion_id != cotId);
             renderCotizacionesPendientes();
         },
-        error: function(err) {
+        error: function (err) {
             console.error("Error al rechazar la cotización de compra:", err);
             alert("Hubo un error al rechazar la cotización.");
         }

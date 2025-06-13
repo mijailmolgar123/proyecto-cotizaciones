@@ -1,5 +1,8 @@
 let itemsDeseos = []; 
 // Estructura: [{tempId: 1, productId: 3, nombre: "xxx", stockDisponible: 37, stockNecesario: 1, precio: 0, precioTotal: 0}, ...]
+let currentPage   = 0;
+const pageSize    = 20;
+let currentTerm   = '';
 
 document.addEventListener("DOMContentLoaded", function () {
     console.log("lista_deseos.js cargado.");
@@ -15,40 +18,58 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // 1. Buscar productos
-function buscarProductos(termino) {
-    $.ajax({
-        url: `/productos/buscar?termino=${encodeURIComponent(termino)}`,
-        method: 'GET',
-        success: function(response){
-            const tbody = $('#productos-busqueda-lista');
-            tbody.empty();
-            // response.productos es el array real
-            (response.productos || []).forEach(producto => {
-                const row = `
-                    <tr>
-                        <td>${producto.id}</td>
-                        <td>${producto.nombre}</td>
-                        <td>${producto.stock}</td>
-                        <td>
-                            <button class="btn btn-primary"
-                                onclick="agregarALista(
-                                    ${producto.id},
-                                    '${producto.nombre.replace(/'/g,"\\'")}',
-                                    ${producto.stock},
-                                    ${producto.precio}
-                                )">
-                                Agregar
-                            </button>
-                        </td>
-                    </tr>
-                `;
-                tbody.append(row);
-            });
-        },
-        error: function(err){
-            console.error("Error al buscar productos", err);
-        }
-    });
+function buscarProductos(termino, page = 0) {
+  currentTerm = termino;
+  $.ajax({
+    url: '/productos',          // usa tu endpoint real
+    method: 'GET',
+    data: {
+      termino: termino,
+      page:    page,
+      per_page: pageSize
+    },
+    success: function(res) {
+      // si tu API devuelve { productos: [...] } ajústalo aquí:
+      const productos = res.productos || res;
+
+      // al buscador de la primera página limpiamos antes
+      if (page === 0) {
+        $('#productos-busqueda-lista').empty();
+      }
+
+      productos.forEach(prod => {
+        $('#productos-busqueda-lista').append(`
+          <tr>
+            <td>${prod.id}</td>
+            <td>${prod.nombre}</td>
+            <td>${prod.stock}</td>
+            <td>${parseFloat(prod.precio).toFixed(2)}</td>
+            <td>
+              <button class="btn btn-primary btn-sm"
+                      onclick="agregarALista(
+                        ${prod.id},
+                        '${prod.nombre.replace(/'/g,"\\'")}',
+                        ${prod.stock},
+                        ${prod.precio}
+                      )">
+                Agregar
+              </button>
+            </td>
+          </tr>
+        `);
+      });
+
+      // muestro/oculto “Ver más” según haya suficiente resultado
+      if (productos.length === pageSize) {
+        $('#btn-ver-mas-productos').show();
+      } else {
+        $('#btn-ver-mas-productos').hide();
+      }
+    },
+    error: function(err) {
+      console.error("Error al buscar productos", err);
+    }
+  });
 }
 
 // 2. Agregar un producto existente a la Lista de Deseos
@@ -67,7 +88,7 @@ function agregarALista(productId, nombre, stockDisponible, precioBase, stockNece
         nombre: nombre,
         stockDisponible: stockDisponible,
         stockNecesario: stockNecesario,
-        precio: precioBase,
+        precio: precioBase.toFixed(2),
         precioTotal: precioBase * stockNecesario
     });
     renderListaDeseos();
@@ -245,3 +266,56 @@ $(function(){
   });
 });
 
+// ── Crear Cliente Nuevo ──
+$('#form-crear-cliente').submit(function(e){
+  e.preventDefault();
+  const nombre = $('#nuevo-cliente-nombre').val().trim();
+  const ruc    = $('#nuevo-cliente-ruc').val().trim();
+  if(!nombre || !ruc){
+    alert('Completa ambos campos.');
+    return;
+  }
+  $.ajax({
+    url: '/clientes',        // tu endpoint para crear cliente
+    method: 'POST',
+    contentType: 'application/json',
+    data: JSON.stringify({ nombre, ruc }),
+    success: function(c){
+      // c.id, c.nombre, c.ruc
+      const label = `${c.nombre} — ${c.ruc}`;
+      $('#cliente-busqueda').val(label).prop('disabled', true);
+      $('#cliente-id').val(c.id);
+      $('#btn-cambiar-cliente').show();
+      $('#modalCrearCliente').modal('hide');
+      // limpia el modal
+      $('#nuevo-cliente-nombre, #nuevo-cliente-ruc').val('');
+    },
+    error: function(err){
+      console.error('No se pudo crear cliente', err);
+      alert('Error al crear cliente.');
+    }
+  });
+});
+
+// Al tipear en el input
+$('#buscar-producto').on('input', function(){
+  const termino = $(this).val().trim();
+  currentPage = 0;
+  if (termino) {
+    buscarProductos(termino, 0);
+  } else {
+    $('#productos-busqueda-lista').empty();
+    $('#btn-ver-mas-productos').hide();
+  }
+});
+
+// Al pulsar “Ver más…”
+$('#btn-ver-mas-productos').on('click', function(){
+  currentPage++;
+  buscarProductos(currentTerm, currentPage);
+});
+
+// Carga inicial: muestro los primeros 20 sin filtro
+$(function(){
+  buscarProductos('', 0);
+});

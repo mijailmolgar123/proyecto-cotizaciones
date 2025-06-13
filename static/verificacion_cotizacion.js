@@ -1,4 +1,4 @@
-$(document).ready(function() {
+$(document).ready(function () {
     const tbody = $('#cotizaciones-lista');
     const btnVerMas = $('#btn-ver-mas');
     const mensajeFin = $('#mensaje-fin');
@@ -16,6 +16,7 @@ $(document).ready(function() {
                 per_page: porPagina
             },
             success: function (response) {
+                tbody.empty();
                 response.cotizaciones.forEach(function (cotizacion) {
                     let estadoClass = 'secondary';
                     if (cotizacion.estado === 'Pendiente') estadoClass = 'warning';
@@ -23,11 +24,15 @@ $(document).ready(function() {
                     else if (cotizacion.estado === 'Finalizado Parcial') estadoClass = 'info';
                     else if (cotizacion.estado === 'Rechazada') estadoClass = 'danger';
 
+
                     let row = `
-                        <tr>
+                        <tr id="cotizacion-${cotizacion.id}">
+                            <td>${cotizacion.id}</td>
                             <td>${cotizacion.cliente}</td>
                             <td>${cotizacion.ruc}</td>
                             <td>${cotizacion.fecha}</td>
+                            <td>${parseFloat(cotizacion.monto).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</td>
+                            <td>${cotizacion.moneda}</td>
                             <td><span class="badge badge-${estadoClass}">${cotizacion.estado}</span></td>
                             <td>${cotizacion.creado_por}</td>
                             <td>
@@ -68,37 +73,46 @@ $(document).ready(function() {
         }
     });
 
-    window.verDetalleCotizacion = function(id) {
+    window.verDetalleCotizacion = function (id) {
         $.ajax({
             url: `/cotizacion/${id}`,
             method: 'GET',
-            success: function(response) {
-                if (response.mensaje === 'Cotización ya convertida') {
-                    alert(`Esta cotización ya ha sido convertida en una orden de venta.`);
+            success: function (response) {
+                // 1) Si el backend envía 'mensaje' bloquea
+                if (response.mensaje) {
+                    alert(response.mensaje);
                     return;
                 }
 
-                let tbody = $('#productos-cotizacion-lista');
-                tbody.empty();
-                response.productos.forEach(function(producto) {
-                    let row = `
-                        <tr>
-                            <td>${producto.nombre}</td>
-                            <td>${producto.precio_unitario}</td>
-                            <td>${producto.cantidad}</td>
-                            <td>${producto.precio_total}</td>
-                            <td><input type="checkbox" class="form-check-input" id="producto-${producto.id}"></td>
-                        </tr>
-                    `;
+                // 2) Si no hay mensaje, cargamos productos y abrimos modal
+                const tbody = $('#productos-cotizacion-lista').empty();
+                response.productos.forEach(function (producto) {
+                    const row = `
+                    <tr>
+                        <td>${producto.nombre}</td>
+                        <td>${producto.precio_unitario}</td>
+                        <td>${producto.cantidad}</td>
+                        <td>${producto.precio_total}</td>
+                        <td>
+                          <input type="checkbox"
+                                 class="form-check-input"
+                                 id="producto-${producto.id}">
+                        </td>
+                    </tr>`;
                     tbody.append(row);
                 });
 
                 window.currentCotizacionId = id;
                 $('#detalleCotizacionModal').modal('show');
             },
-            error: function(error) {
-                console.error("Error al obtener los detalles de la cotización:", error);
-                alert("Hubo un error al obtener los detalles de la cotización.");
+            error: function (xhr) {
+                // 3) Si el backend respondió con un status ≠ 200 y mensaje, lo mostramos
+                const json = xhr.responseJSON;
+                if (json && json.mensaje) {
+                    alert(json.mensaje);
+                } else {
+                    alert("Hubo un error al obtener los detalles de la cotización.");
+                }
             }
         });
     };
@@ -112,7 +126,7 @@ $(document).ready(function() {
             return;
         }
         let productosSeleccionados = [];
-        $('#productos-cotizacion-lista tr').each(function() {
+        $('#productos-cotizacion-lista tr').each(function () {
             if ($(this).find('input[type="checkbox"]').is(':checked')) {
                 productosSeleccionados.push({
                     id: $(this).find('input[type="checkbox"]').attr('id').replace('producto-', ''),
@@ -133,29 +147,25 @@ $(document).ready(function() {
                     fecha_orden_compra: fechaOrdenCompra,
                     productos: productosSeleccionados
                 }),
-                success: function(response) {
+                success: function (response) {
                     alert(response.lista_deseo_info || 'Orden de venta generada exitosamente.');
                     $('#detalleCotizacionModal').modal('hide');
-                  
+
                     // 2) Obtengo el nuevo estado y determino la clase bootstrap
                     const nuevoEstado = response.estado;
-                    const claseBadge  = (nuevoEstado === 'Finalizado Total')
-                                       ? 'success'   // verde
-                                       : 'info';     // azul
-                  
-                    // 3) Localizo la fila de la cotización actual
-                    //    Asegúrate de que en cargarCotizaciones le diste un id al <tr>:
-                    //      <tr id="cotizacion-{{id}}"> … </tr>
+                    const claseBadge = (nuevoEstado === 'Finalizado Total')
+                        ? 'success'   // verde
+                        : 'info';     // azul
                     const $fila = $(`#cotizacion-${window.currentCotizacionId}`);
-                  
+
                     // 4) Reemplazo sólo la columna del estado (índice 3)
                     $fila
-                      .find('td').eq(3)
-                      .html(`<span class="badge badge-${claseBadge}">${nuevoEstado}</span>`);
+                        .find('td').eq(3)
+                        .html(`<span class="badge badge-${claseBadge}">${nuevoEstado}</span>`);
 
                     window.location.reload();
-                  },
-                error: function(xhr, status, error) {
+                },
+                error: function (xhr, status, error) {
                     console.error('Error al obtener los detalles de la orden de venta:', xhr.responseText);
                     alert("Hubo un error al obtener los detalles de la orden de venta.");
                 }
@@ -174,24 +184,15 @@ $(document).ready(function() {
         $.ajax({
             url: `/rechazar_cotizacion/${window.currentCotizacionId}`,
             method: 'POST',
-            success: function(response) {
+            success: function (response) {
                 alert('Cotización rechazada correctamente.');
                 $('#detalleCotizacionModal').modal('hide');
                 window.location.reload();
             },
-            error: function(error) {
+            error: function (error) {
                 alert('Hubo un problema al rechazar la cotización.');
             }
         });
     });
 
-    function reiniciarYRecargarCotizaciones() {
-        paginaActual = 1;
-        totalPaginas = 1;
-        $('#cotizaciones-lista').empty();
-        $('#mensaje-fin').hide();
-        $('#btn-ver-mas').show();
-        cargarCotizaciones(paginaActual);
-    }
-    
 });

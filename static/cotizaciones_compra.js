@@ -156,6 +156,7 @@ function guardarCotizacionCompra() {
             $('#proveedor-busqueda').prop('disabled', false).val('');
             $('#proveedor-id').val('');
             $('#btn-cambiar-proveedor').hide();
+            cargarItemsPendientes();
         },
         error(err) {
             console.error("Error al crear cotizacion compra", err);

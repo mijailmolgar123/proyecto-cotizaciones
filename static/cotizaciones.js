@@ -39,6 +39,7 @@ function buscarProductos(page = 1, term = '') {
           <tr>
             <td>${p.id}</td>
             <td>${p.nombre}</td>
+            <td>${parseFloat(p.precio).toFixed(2)}</td>
             <td>${p.stock}</td>
             <td><button class="btn btn-primary" onclick="agregarAOrden(${p.id})">Agregar</button></td>
           </tr>`);
@@ -138,7 +139,7 @@ window.agregarAOrden = function (id) {
           <td>
             <button
               class="btn btn-sm btn-secondary"
-              onclick="mostrarModalEditarPrecio(${p.id})"
+              onclick="mostrarModalEditarProducto(${p.id})"
             >Editar</button>
             <button
               class="btn btn-sm btn-danger"
@@ -261,7 +262,7 @@ function guardarCotizacion() {
   });
 }
 
-$('#form-cotizacion').on('submit', function(e){
+$('#form-cotizacion').on('submit', function (e) {
   e.preventDefault();
   guardarCotizacion();
 });
@@ -361,44 +362,82 @@ $('#generar-cotizacion').on('click', function () {
 });
 
 let productoAEditar = null;
+// unidadesDisponibles sigue siendo tu array, p. ej.:
+let unidadesDisponibles = ['UNIDAD', 'CAJA', 'ROLLO', 'METRO'];
 
-// 1) Abre el modal y precarga el precio actual
-window.mostrarModalEditarPrecio = function (id) {
+$('#modalEditarProducto')
+  .on('shown.bs.modal', function(){
+    $(this).attr('aria-hidden','false');
+    $('#input-nuevo-precio').trigger('focus');
+  });
+
+window.mostrarModalEditarProducto = function (id) {
   productoAEditar = id;
   const $fila = $(`#producto-${id}`);
   const precioActual = parseFloat($fila.data('precio-soles')) || 0;
+  const unidadActual = $fila.find('td').eq(3).text().trim();
+
+  // 1) Precio
   $('#input-nuevo-precio').val(precioActual.toFixed(2));
-  $('#modalEditarPrecio').modal('show');
+
+  // 2) Poblar datalist
+  const opciones = unidadesDisponibles
+    .map(u => `<option value="${u}">`)
+    .join('');
+  $('#datalist-unidades').html(opciones);
+
+  // 3) Valor inicial del input (puede ser personalizado)
+  $('#input-nueva-unidad').val(unidadActual);
+
+  // 4) Mostrar modal
+  $('#modalEditarProducto').modal('show');
+
 };
 
 // 2) Al hacer clic en “Guardar”
-$('#btn-guardar-precio').on('click', function () {
+$('#btn-guardar-producto').on('click', function () {
   const nuevoPrecio = parseFloat($('#input-nuevo-precio').val());
+  const nuevaUnidad = $('#input-nueva-unidad').val();
   if (isNaN(nuevoPrecio) || nuevoPrecio < 0) {
     return alert('Ingresa un precio válido.');
   }
+  if (!nuevaUnidad) {
+    return alert('Selecciona una unidad.');
+  }
 
-  // 3) Llamada AJAX al backend
+  // AJAX a tu endpoint de actualización
   $.ajax({
-    url: `/productos/${productoAEditar}`,   // veremos el endpoint en el back
+    url: `/productos/${productoAEditar}`,   // backend: acepta precio y unidad
     method: 'PUT',
     contentType: 'application/json',
-    data: JSON.stringify({ precio: nuevoPrecio }),
+    data: JSON.stringify({
+      precio: nuevoPrecio,
+      unidad: nuevaUnidad
+    }),
     success: () => {
-      // 4) Actualizo el DOM sin recargar:
+      // 1) Actualizo el DOM:
       const $fila = $(`#producto-${productoAEditar}`);
-      $fila.data('precio-soles', nuevoPrecio);
-      $fila.find('.precio-soles').text(nuevoPrecio.toFixed(2));
+      $fila
+        .data('precio-soles', nuevoPrecio)
+        .find('.precio-soles').text(nuevoPrecio.toFixed(2));
+      $fila.find('td').eq(3).text(nuevaUnidad);  // columna Unidad
+
+      // 2) Recalculo todo
       recalcFila(productoAEditar);
       recalcTotales();
-      $('#modalEditarPrecio').modal('hide');
+
+      // 3) Cierro modal
+      $('#modalEditarProducto').modal('hide');
+
+      $('#modalEditarProducto').on('hidden.bs.modal', function () {
+        $(this).attr('aria-hidden', 'true');
+      });
     },
-    error: (xhr, status, err) => {
-      console.error('Error al actualizar precio:', err);
-      alert('No se pudo actualizar el precio en el servidor.');
+    error: err => {
+      console.error('Error al actualizar producto:', err);
+      alert('No se pudo actualizar en el servidor.');
     }
   });
-
 });
 
 
@@ -442,7 +481,7 @@ $('#lista-clientes').on('click', 'li[data-id]', function () {
   $('#btn-cambiar-cliente').show();
   $('#btn-cambiar-cliente').click(resetClienteSelection);
 
-  $('#paso-2-contacto').show();     
+  $('#paso-2-contacto').show();
   cargarContactos(id);
 });
 
@@ -496,13 +535,13 @@ $('#btn-nuevo-contacto').click(() => {
   $('#form-nuevo-contacto').toggle();
 });
 
-$('#guardar-nuevo-contacto').click(function(e){
+$('#guardar-nuevo-contacto').click(function (e) {
   e.preventDefault();
-  const clienteId   = $('#cliente-id').val();
+  const clienteId = $('#cliente-id').val();
   const solicitante = $('#nuevo-contacto-nombre').val();
-  const email       = $('#nuevo-contacto-email').val();
-  const referencia  = $('#nuevo-contacto-referencia').val();
-  const celular     = $('#nuevo-contacto-celular').val();
+  const email = $('#nuevo-contacto-email').val();
+  const referencia = $('#nuevo-contacto-referencia').val();
+  const celular = $('#nuevo-contacto-celular').val();
 
   $.ajax({
     url: `/clientes/${clienteId}/contactos`,
@@ -533,7 +572,7 @@ $('#cancelar-nuevo-contacto').click(() => {
   $('#form-nuevo-contacto').hide();
 });
 
-function resetClienteSelection(){
+function resetClienteSelection() {
   // 1) Limpiar y reactivar el input
   $('#cliente-busqueda')
     .val('')

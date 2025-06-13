@@ -757,27 +757,16 @@ def guardar_cotizacion():
     }), 201
 
 @app.route('/productos/<int:id>', methods=['PUT'])
-@login_required
-def actualizar_precio_producto(id):
+def actualizar_producto(id):
     data = request.get_json()
-    if 'precio' not in data:
-        return jsonify({'error':'Falta campo "precio"'}), 400
+    prod = db.session.get(Producto, id)
+    if 'precio' in data:
+        prod.precio = data['precio']
+    if 'unidad' in data:
+        prod.unidad = data['unidad']
+    db.session.commit()
+    return jsonify({}), 200
 
-    producto = db.session.get(Producto, id)
-    if not producto:
-        return jsonify({'error':'Producto no encontrado'}), 404
-
-    try:
-        producto.precio = float(data['precio'])
-        db.session.commit()
-        return jsonify({
-            'mensaje': 'Precio actualizado con éxito',
-            'id': producto.id,
-            'precio': producto.precio
-        }), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error':'Error actualizando precio'}), 500
     
 @app.route('/descargar_excel/<int:cot_id>', methods=['GET'])
 @login_required
@@ -846,12 +835,30 @@ def buscar_clientes():
     return jsonify([{'id': c.id,'nombre':c.nombre,'ruc':c.ruc} for c in resultados])
 
 @app.route('/clientes', methods=['POST'])
-@login_required
 def crear_cliente():
-    data = request.get_json() or request.form
-    c = Cliente(nombre=data['nombre'], ruc=data['ruc'])
-    db.session.add(c); db.session.commit()
-    return jsonify({'id':c.id,'nombre':c.nombre,'ruc':c.ruc})
+    data = request.get_json()
+    # 1) Compruebo si ya existe ese RUC
+    existe = Cliente.query.filter_by(ruc=data['ruc']).first()
+    if existe:
+        return jsonify({
+            'error': 'Ya existe un cliente con ese RUC.',
+            'cliente_id': existe.id,
+            'nombre': existe.nombre
+        }), 409
+
+    # 2) Si no existe, lo creo
+    nuevo = Cliente(
+      nombre = data['nombre'],
+      ruc    = data['ruc'],
+      activo = True
+    )
+    db.session.add(nuevo)
+    db.session.commit()
+    return jsonify({
+      'id': nuevo.id,
+      'nombre': nuevo.nombre,
+      'ruc': nuevo.ruc
+    }), 201
 
 @app.route('/clientes/<int:cliente_id>/contactos', methods=['GET'])
 @login_required
@@ -877,7 +884,7 @@ def crear_contacto(cliente_id):
 @app.route('/cotizacion/<int:id>', methods=['GET'])
 @login_required
 def obtener_cotizacion(id):
-    # 1) Compruebo con SQL directo si ya existe una orden para esta cotización
+    # 1) ¿Ya existe orden de venta?
     existe = db.session.execute(
         text("SELECT id FROM orden_venta WHERE cotizacion_id = :cid LIMIT 1"),
         {'cid': id}
@@ -886,33 +893,36 @@ def obtener_cotizacion(id):
         return jsonify({
             'mensaje': 'Cotización ya convertida',
             'orden_venta_id': existe[0]
-        }), 200
+        }), 400
 
-    # 2) Ahora sí traigo la cotización (usando ORM, que aquí no falla)
+    # 2) Buscamos la cotización
     cot = db.session.get(Cotizacion, id)
     if not cot:
-        return jsonify({'mensaje': 'Cotización no encontrada'}), 404
+        return jsonify({'mensaje': 'Cotización no encontrada'}), 200
 
-    # 3) Armo el array de productos
+    # 3) Si está rechazada, devolvemos mensaje
+    if cot.estado == 'Rechazada':
+        return jsonify({'mensaje': 'Cotización rechazada'}), 200
+
+    # 4) Si llegamos aquí, es Pendiente (o Finalizado, si quieres permitirlo)
+    #    armamos los productos y devolvemos todo lo que tu front necesita:
+
     productos = []
-    for pc in cot.productos:  # relación ProductoCotizacion
+    for pc in cot.productos:
         prod = db.session.get(Producto, pc.producto_id)
-        nombre = prod.nombre if prod else f"Prod ID {pc.producto_id}"
         productos.append({
             'id':              pc.producto_id,
-            'nombre':          nombre,
+            'nombre':          prod.nombre if prod else f"ID {pc.producto_id}",
             'precio_unitario': pc.precio_unitario,
             'cantidad':        pc.cantidad,
             'precio_total':    pc.precio_total
         })
 
-    # 4) Nombre del usuario que creó
     usuario = db.session.get(Usuario, cot.creado_por)
 
-    # 5) Devuelvo el JSON que espera tu JS
     return jsonify({
         'id':         cot.id,
-        'cliente':    cot.cliente.nombre,   # relación Cliente
+        'cliente':    cot.cliente.nombre,
         'ruc':        cot.cliente.ruc,
         'fecha':      cot.fecha,
         'estado':     cot.estado,
@@ -926,29 +936,33 @@ def obtener_cotizaciones_paginadas():
     page     = request.args.get('page',     1,  type=int)
     per_page = request.args.get('per_page', 20, type=int)
 
-    # Paginación con SQLAlchemy
-    pagination = Cotizacion.query.\
-        order_by(Cotizacion.id.desc()).\
-        paginate(page=page, per_page=per_page, error_out=False)
+    pagination = Cotizacion.query \
+        .order_by(Cotizacion.id.desc()) \
+        .paginate(page=page, per_page=per_page, error_out=False)
 
     cotizaciones_data = []
     for cot in pagination.items:
-        cliente = cot.cliente          # relación SQLAlchemy Cliente obj
+        # relación SQLAlchemy a Cliente y Usuario
+        cliente = cot.cliente
         usuario = db.session.get(Usuario, cot.creado_por)
+
         cotizaciones_data.append({
-            'id':        cot.id,
-            'cliente':   cliente.nombre,
-            'ruc':       cliente.ruc,
-            'fecha':     cot.fecha,
-            'estado':    cot.estado,
-            'creado_por': usuario.nombre_usuario if usuario else 'Desconocido'
+            'id':                 cot.id,
+            'cliente':            cliente.nombre,
+            'ruc':                cliente.ruc,
+            'numero_cotizacion':  cot.id,            # aquí usas el id
+            'fecha':              cot.fecha,         # ya es String
+            'monto':              float(cot.total),  # tu total
+            'moneda':             cot.tipo_cambio,   # tu campo de moneda
+            'estado':             cot.estado,
+            'creado_por':         usuario.nombre_usuario if usuario else 'Desconocido'
         })
 
     return jsonify({
-        'cotizaciones': cotizaciones_data,
+        'cotizaciones':  cotizaciones_data,
         'pagina_actual': pagination.page,
-        'total':          pagination.total,
-        'paginas':        pagination.pages
+        'total':         pagination.total,
+        'paginas':       pagination.pages
     })
 
 @app.route('/transformar_orden_venta/<int:cotizacion_id>', methods=['POST'])
@@ -1606,9 +1620,13 @@ def crear_lista_deseos_con_items():
 @app.route('/items_deseo_pendientes', methods=['GET'])
 @login_required
 def items_deseo_pendientes():
-    pendientes = db.session.query(ItemDeseo).join(ListaDeseos).filter(
-        ListaDeseos.estado=='Abierto'
-    ).all()
+    pendientes = (
+        db.session.query(ItemDeseo)
+        .filter(ItemDeseo.estado_item == 'Pendiente')           # <-- aquí
+        .join(ListaDeseos, ListaDeseos.id == ItemDeseo.lista_deseos_id)
+        .filter(ListaDeseos.estado == 'Abierto')                # opcional: solo listas abiertas
+        .all()
+    )
 
     out = []
     for item in pendientes:
@@ -1706,7 +1724,7 @@ def crear_proveedor():
 @login_required
 def cotizaciones_compra_pendientes():
     cotizaciones = CotizacionCompra.query.filter(
-        CotizacionCompra.estado.notin_(["Procesada","Cerrada","Rechazada"])
+        CotizacionCompra.estado.notin_(["Procesada","Cerrada","Rechazada","Procesada Parcial"])
     ).all()
 
     data = []
@@ -1740,7 +1758,6 @@ def cotizaciones_compra_pendientes():
 
     return jsonify(data), 200
 
-from datetime import datetime
 
 @app.route('/orden_compra/crear_desde_cotizacion', methods=['POST'])
 @login_required
@@ -1759,33 +1776,36 @@ def crear_orden_compra_desde_cotizacion():
     if not cot:
         return jsonify({'error': 'Cotización de compra no encontrada'}), 404
 
-    # Parseamos la fecha desde string a date
+    # parsear fecha
     try:
         fecha_orden = datetime.strptime(fecha_str, '%Y-%m-%d').date()
     except ValueError:
         return jsonify({'error': 'Formato de fecha inválido'}), 400
 
-    # Creamos la cabecera usando la FK proveedor_id
+    # crear cabecera
     nueva_orden = OrdenCompra(
         cotizacion_compra_id = cot.id,
         numero_orden         = nro,
         fecha_orden          = fecha_orden,
         observaciones        = obs,
-        proveedor_id         = cot.proveedor_id,    # <— FK
+        proveedor_id         = cot.proveedor_id,
         estado               = 'Pendiente',
         creado_por           = current_user.id
     )
     db.session.add(nueva_orden)
-    db.session.commit()  # para tener nueva_orden.id
+    db.session.commit()
 
-    # Detalles
+    # procesar cada detalle
     for det in productos:
         detalle = db.session.get(ProductoCotizacionCompra, det['id_detalle'])
         if not detalle or detalle.estado != 'Pendiente':
             continue
-        detalle.estado = 'Comprado'
-        detalle.item_deseo.estado = 'Ordenado'
 
+        # marcar detalle de cotización y de lista deseos
+        detalle.estado = 'Comprado'
+        detalle.item_deseo.estado_item = 'Ordenado'
+
+        # crear línea de orden
         nuevo = ProductoOrdenCompra(
             orden_compra_id           = nueva_orden.id,
             cotizacion_compra_item_id = detalle.id,
@@ -1795,7 +1815,7 @@ def crear_orden_compra_desde_cotizacion():
         )
         db.session.add(nuevo)
 
-        # descartamos las demás ofertas para el mismo item_deseo
+        # descartar otras ofertas del mismo item
         ProductoCotizacionCompra.query.filter(
             ProductoCotizacionCompra.item_deseo_id == detalle.item_deseo_id,
             ProductoCotizacionCompra.id != detalle.id,
@@ -1804,7 +1824,7 @@ def crear_orden_compra_desde_cotizacion():
 
     db.session.commit()
 
-    # Actualizar estado de la cotización de compra
+    # actualizar estado de la cotización de compra
     estados = [p.estado for p in cot.productos_cotizados]
     if all(e in ['Comprado','Descartado'] for e in estados):
         cot.estado = 'Cerrada'
