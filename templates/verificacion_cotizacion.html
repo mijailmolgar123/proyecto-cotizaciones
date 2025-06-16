@@ -3,79 +3,118 @@
 {% block title %}Control de Cotización{% endblock %}
 
 {% block content %}
-    <div class="container">
-        <h1>Control de Cotización</h1>
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Empresa</th>
-                    <th>RUC</th>
-                    <th>Fecha</th>
-                    <th>Monto</th>
-                    <th>Moneda</th>
-                    <th>Estado</th>
-                    <th>Creado por</th>
-                    <th class="columna-acciones">Acciones</th>
-                </tr>
-            </thead>
-            <tbody id="cotizaciones-lista">
-                <!-- Cotizaciones cargadas dinámicamente -->
-            </tbody>
-        </table>
-        <div class="text-center mt-3">
-            <button id="btn-ver-mas" class="btn btn-outline-primary">Ver más</button>
-            <div id="mensaje-fin" class="mt-2 text-muted" style="display: none;">No hay más cotizaciones.</div>
-        </div>   
+<!-- FILTROS -->
+<!-- FILTROS -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <label for="filtro-fecha-inicio">Fecha desde:</label>
+        <input type="text" id="filtro-fecha-inicio" class="form-control fecha-picker" placeholder="DD/MM/AAAA">
     </div>
+    <div class="col-md-3">
+        <label for="filtro-fecha-fin">Hasta:</label>
+        <input type="text" id="filtro-fecha-fin" class="form-control fecha-picker" placeholder="DD/MM/AAAA">
+    </div>
+    <div class="col-md-3">
+        <label for="filtro-ruc">RUC:</label>
+        <input type="text" id="filtro-ruc" class="form-control" placeholder="Filtrar por RUC">
+    </div>
+    <div class="col-md-2">
+        <label for="filtro-estado">Estado:</label>
+        <select id="filtro-estado" class="form-control">
+            <option value="">Todos</option>
+            <option value="Pendiente">Pendiente</option>
+            <option value="Finalizado Total">Finalizado Total</option>
+            <option value="Finalizado Parcial">Finalizado Parcial</option>
+            <option value="Rechazada">Rechazada</option>
+        </select>
+    </div>
+    <div class="col-md-1 align-self-end">
+        <button id="btn-filtrar" class="btn btn-primary w-100">Filtrar</button>
+    </div>
+</div>
+<!-- TABLA DE COTIZACIONES -->
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Empresa</th>
+      <th>RUC</th>
+      <th>Fecha</th>
+      <th>Monto</th>
+      <th>Moneda</th>
+      <th>Estado</th>
+      <th>Creado por</th>
+      <th class="columna-acciones">Acciones</th>
+    </tr>
+  </thead>
+  <tbody id="cotizaciones-lista">
+    <!-- Aquí inyectamos dinámicamente -->
+  </tbody>
+</table>
 
-    <!-- Modal para ver detalles de cotización y aprobar productos -->
-    <div class="modal fade" id="detalleCotizacionModal" tabindex="-1" role="dialog"
-        aria-labelledby="detalleCotizacionModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="detalleCotizacionModalLabel">Detalle de Cotización</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
+<!-- PAGINACIÓN -->
+<div class="d-flex justify-content-between align-items-center">
+  <button id="btn-anterior" class="btn btn-outline-primary">Anterior</button>
+  <span>Página <span id="page-actual">1</span> de <span id="page-total">1</span></span>
+  <button id="btn-siguiente" class="btn btn-outline-primary">Siguiente</button>
+</div>
+
+
+<!-- Modal para ver detalles de cotización y aprobar productos -->
+<div class="modal fade" id="detalleCotizacionModal" tabindex="-1" role="dialog"
+    aria-labelledby="detalleCotizacionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detalleCotizacionModalLabel">Detalle de Cotización</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="numeroOrdenCompra">Número de Orden de Compra:</label>
+                    <input type="text" class="form-control" id="numeroOrdenCompra"
+                        placeholder="Ingrese el número de OC">
                 </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="numeroOrdenCompra">Número de Orden de Compra:</label>
-                        <input type="text" class="form-control" id="numeroOrdenCompra" placeholder="Ingrese el número de OC">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="fechaOrdenCompra">Fecha de Orden de Compra:</label>
-                        <input type="date" class="form-control" id="fechaOrdenCompra">
-                    </div>
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Producto</th>
-                                <th>Precio Unitario</th>
-                                <th>Cantidad</th>
-                                <th>Precio Total</th>
-                                <th>Seleccionar</th>
-                            </tr>
-                        </thead>
-                        <tbody id="productos-cotizacion-lista">
-                            <!-- Productos de la cotización -->
-                        </tbody>
-                    </table>                 
+
+                <div class="form-group">
+                    <label for="fechaOrdenCompra">Fecha de Orden de Compra:</label>
+                    <input type="date" class="form-control" id="fechaOrdenCompra">
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-danger" id="rechazar-cotizacion">Rechazar Cotización</button>
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" id="transformar-orden-venta">Transformar a Orden de Venta</button>
-                </div>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Precio Unitario</th>
+                            <th>Cantidad</th>
+                            <th>Precio Total</th>
+                            <th>Seleccionar</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productos-cotizacion-lista">
+                        <!-- Productos de la cotización -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" id="rechazar-cotizacion">Rechazar Cotización</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="transformar-orden-venta">Transformar a Orden de
+                    Venta</button>
             </div>
         </div>
     </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <!-- Scripts específicos de ESTA página (se ejecutan después de Bootstrap.js) -->
 <script src="{{ url_for('static', filename='verificacion_cotizacion.js') }}"></script>
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+<script>
+    $('.fecha-picker').datepicker({ dateFormat: 'dd/mm/yy' });
+</script>
+
 {% endblock %}

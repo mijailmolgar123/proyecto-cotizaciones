@@ -366,8 +366,8 @@ let productoAEditar = null;
 let unidadesDisponibles = ['UNIDAD', 'CAJA', 'ROLLO', 'METRO'];
 
 $('#modalEditarProducto')
-  .on('shown.bs.modal', function(){
-    $(this).attr('aria-hidden','false');
+  .on('shown.bs.modal', function () {
+    $(this).attr('aria-hidden', 'false');
     $('#input-nuevo-precio').trigger('focus');
   });
 
@@ -441,34 +441,47 @@ $('#btn-guardar-producto').on('click', function () {
 });
 
 
-$(function () {
+(function () {
   let timeout = null;
-  $('#cliente-busqueda').on('input', function () {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => {
-      const term = $(this).val().trim();           // ← ahora sí existe `term`
-      if (!term) {
-        $('#lista-clientes').empty();
-        return;
-      }
-      $.getJSON('/clientes', { term }, data => {
-        const items = data.map(c =>
-          `<li class="list-group-item list-group-item-action"
-            data-id="${c.id}"
-            data-ruc="${c.ruc}"
-            data-nombre="${c.nombre}">
-          <strong>${c.nombre}</strong> <small>(RUC: ${c.ruc})</small>
-        </li>`
-        );
-        // Si no hay resultados, muestra un mensaje
-        if (!items.length) {
-          items.push(`<li class="list-group-item text-muted">No encontrado. Haz clic en + para crear</li>`);
-        }
-        $('#lista-clientes').html(items.join(''));
-      });
-    }, 300);
+
+  function renderClientes(data) {
+    const items = data.map(c =>
+      `<li class="list-group-item list-group-item-action"
+           data-id="${c.id}"
+           data-ruc="${c.ruc}"
+           data-nombre="${c.nombre}">
+         <strong>${c.nombre}</strong>
+         <small>(RUC: ${c.ruc})</small>
+       </li>`);
+    $('#lista-clientes')
+      .html(items.length ? items.join('') :
+        '<li class="list-group-item text-muted">No hay coincidencias</li>')
+      .show();
+  }
+
+  function fetchClientes(term = '') {
+    $.getJSON('/clientes', { term }, renderClientes);
+  }
+
+  $('#cliente-busqueda')
+    .on('input', function () {
+      clearTimeout(timeout);
+      const val = $(this).val().trim();
+      timeout = setTimeout(() => {
+        fetchClientes(val);
+      }, 300);         // debounce
+    })
+    .on('focus', function () {
+      fetchClientes(); // por defecto trae term="" → primeros 10
+    });
+
+  // Si haces clic fuera, oculta la lista
+  $(document).on('click', e => {
+    if (!$(e.target).closest('#cliente-busqueda, #lista-clientes').length) {
+      $('#lista-clientes').hide();
+    }
   });
-});
+})();
 
 $('#lista-clientes').on('click', 'li[data-id]', function () {
   const id = $(this).data('id');

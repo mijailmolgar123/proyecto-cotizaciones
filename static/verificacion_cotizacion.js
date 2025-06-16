@@ -1,77 +1,88 @@
-$(document).ready(function () {
-    const tbody = $('#cotizaciones-lista');
-    const btnVerMas = $('#btn-ver-mas');
-    const mensajeFin = $('#mensaje-fin');
+$(function () {
+  const tbody       = $('#cotizaciones-lista');
+  const btnAnt      = $('#btn-anterior');
+  const btnSig      = $('#btn-siguiente');
+  const btnFiltrar  = $('#btn-filtrar');
+  const lblPage     = $('#page-actual');
+  const lblTotal    = $('#page-total');
+  const perPage     = 20;
 
-    let paginaActual = 1;
-    let totalPaginas = 1;
-    const porPagina = 20;
+  let paginaActual = 1;
+  let totalPaginas = 1;
 
-    function cargarCotizaciones(page) {
-        $.ajax({
-            url: '/cotizaciones',
-            method: 'GET',
-            data: {
-                page: page,
-                per_page: porPagina
-            },
-            success: function (response) {
-                tbody.empty();
-                response.cotizaciones.forEach(function (cotizacion) {
-                    let estadoClass = 'secondary';
-                    if (cotizacion.estado === 'Pendiente') estadoClass = 'warning';
-                    else if (cotizacion.estado === 'Finalizado Total') estadoClass = 'success';
-                    else if (cotizacion.estado === 'Finalizado Parcial') estadoClass = 'info';
-                    else if (cotizacion.estado === 'Rechazada') estadoClass = 'danger';
+  function obtenerFiltros() {
+    return {
+      page: paginaActual,
+      per_page: perPage,
+      fecha_inicio: $('#filtro-fecha-inicio').val(),
+      fecha_fin:    $('#filtro-fecha-fin').val(),
+      ruc:          $('#filtro-ruc').val().trim(),
+      estado:       $('#filtro-estado').val()
+    };
+  }
 
-
-                    let row = `
-                        <tr id="cotizacion-${cotizacion.id}">
-                            <td>${cotizacion.id}</td>
-                            <td>${cotizacion.cliente}</td>
-                            <td>${cotizacion.ruc}</td>
-                            <td>${cotizacion.fecha}</td>
-                            <td>${parseFloat(cotizacion.monto).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</td>
-                            <td>${cotizacion.moneda}</td>
-                            <td><span class="badge badge-${estadoClass}">${cotizacion.estado}</span></td>
-                            <td>${cotizacion.creado_por}</td>
-                            <td>
-                                <button class="btn btn-primary" onclick="verDetalleCotizacion(${cotizacion.id})">
-                                    Transformar a Orden de Venta
-                                </button>
-                            </td>
-                        </tr>
-                    `;
-                    tbody.append(row);
-                });
-
-                paginaActual = response.pagina_actual;
-                totalPaginas = response.paginas;
-
-                if (paginaActual >= totalPaginas) {
-                    btnVerMas.hide();
-                    mensajeFin.show();
-                } else {
-                    btnVerMas.show();
-                    mensajeFin.hide();
-                }
-            },
-            error: function (xhr, status, error) {
-                console.error('Error al cargar cotizaciones:', error);
-                alert('Hubo un problema al cargar las cotizaciones.');
-            }
+  function cargarCotizaciones(page = 1) {
+    paginaActual = page;
+    tbody.empty();
+    $.ajax({
+      url: '/cotizaciones',
+      method: 'GET',
+      data: obtenerFiltros(),
+      success(res) {
+        // Inyectar filas
+        res.cotizaciones.forEach(c => {
+          const clase = c.estado==='Pendiente' ? 'warning'
+                      : c.estado==='Rechazada'? 'danger'
+                      : c.estado.includes('Finalizado')? 'success'
+                      : 'secondary';
+          tbody.append(`
+            <tr id="cot-${c.id}">
+              <td>${c.id}</td>
+              <td>${c.cliente}</td>
+              <td>${c.ruc}</td>
+              <td>${c.fecha}</td>
+              <td>${parseFloat(c.monto).toLocaleString('es-PE',{minimumFractionDigits:2})}</td>
+              <td>${c.moneda}</td>
+              <td><span class="badge badge-${clase}">${c.estado}</span></td>
+              <td>${c.creado_por}</td>
+              <td>
+                <button class="btn btn-primary"
+                        onclick="verDetalleCotizacion(${c.id})">
+                  Transformar a Orden de Venta
+                </button>
+              </td>
+            </tr>
+          `);
         });
-    }
 
-    // Cargar la primera página al inicio
-    cargarCotizaciones(paginaActual);
-
-    // Botón "Ver más"
-    btnVerMas.click(function () {
-        if (paginaActual < totalPaginas) {
-            cargarCotizaciones(paginaActual + 1);
-        }
+        // Actualizar controles de paginación
+        paginaActual = res.pagina_actual;
+        totalPaginas = res.paginas;
+        lblPage.text(paginaActual);
+        lblTotal.text(totalPaginas);
+        btnAnt.prop('disabled', paginaActual <= 1);
+        btnSig.prop('disabled', paginaActual >= totalPaginas);
+      },
+      error() {
+        alert('Error cargando cotizaciones.');
+      }
     });
+  }
+
+  // -----------------------------------------------------------
+  // Aquí: dispara la búsqueda SOLO al hacer click en “Filtrar”
+  btnFiltrar.on('click', () => cargarCotizaciones(1));
+
+  // Navegación de páginas
+  btnAnt.on('click', () => {
+    if (paginaActual > 1) cargarCotizaciones(paginaActual - 1);
+  });
+  btnSig.on('click', () => {
+    if (paginaActual < totalPaginas) cargarCotizaciones(paginaActual + 1);
+  });
+
+  // Carga inicial sin filtros
+  cargarCotizaciones();
 
     window.verDetalleCotizacion = function (id) {
         $.ajax({

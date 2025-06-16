@@ -11,3 +11,14 @@ depuracion.py
 import_inventory.py
 purge_db.py
 CONTROL DE STOCK.xlsm
+cotizacion.csv
+import_cotizaciones.py
+orden_venta.csv
+producto_cotizacion.csv
+producto_orden.csv
+producto.csv
+sync_productos_csv.py
+sync_staging_to_prod.py
+sync_producto_cotizacion.py
+import_ordenes_venta.py
+import_producto_cotizacion.py

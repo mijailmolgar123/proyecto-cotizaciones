@@ -75,8 +75,9 @@ def create_app():
     #real
     #db_uri = "postgresql+psycopg2://postgres:HQX4meI4pYJGGxP2WL7w@proyecto-cotizaciones-db.c09o2u6em92b.us-east-1.rds.amazonaws.com:5432/proyecto_cotizaciones"
     #
-    db_uri = "postgresql+psycopg2://postgres:Mijail28++@proyecto-cotizaciones-staging.c09o2u6em92b.us-east-1.rds.amazonaws.com:5432/proyecto_cotizaciones"
-
+    db_uri = "postgresql+psycopg2://postgres:Mijail28++@proyecto-cotizaciones-v1.c09o2u6em92b.us-east-1.rds.amazonaws.com:5432/proyecto_cotizaciones"
+    
+    #db_uri = "postgresql+psycopg2://postgres:Mijail28++@proyecto-cotizaciones-staging.c09o2u6em92b.us-east-1.rds.amazonaws.com:5432/proyecto_cotizaciones"
     # Si no se pudo obtener el secreto, usa una variable de entorno local como fallback
     if not db_uri:
         db_uri = os.getenv('DATABASE_URI', 'fallback') 
@@ -137,7 +138,7 @@ class Contacto(db.Model):
     cliente_id   = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=False)
     solicitante  = db.Column(db.String(100), nullable=False)
     email        = db.Column(db.String(100), nullable=False)
-    referencia   = db.Column(db.String(100), nullable=True)
+    referencia   = db.Column(db.String(255), nullable=True)
     celular      = db.Column(db.String(15),  nullable=True)
     activo       = db.Column(db.Boolean, default=True)
 
@@ -935,34 +936,54 @@ def obtener_cotizacion(id):
 def obtener_cotizaciones_paginadas():
     page     = request.args.get('page',     1,  type=int)
     per_page = request.args.get('per_page', 20, type=int)
+    fi       = request.args.get('fecha_inicio', default='', type=str).strip()
+    ff       = request.args.get('fecha_fin',    default='', type=str).strip()
+    ruc      = request.args.get('ruc',          default='', type=str).strip()
+    est      = request.args.get('estado',       default='', type=str).strip()
 
-    pagination = Cotizacion.query \
-        .order_by(Cotizacion.id.desc()) \
-        .paginate(page=page, per_page=per_page, error_out=False)
+    # Base query incluyendo JOIN para filtrar por Cliente.ruc
+    q = Cotizacion.query.join(Cliente)
 
+    # Filtros de fecha usando to_date sobre el string
+    if fi:
+        dt_i = datetime.strptime(fi, '%d/%m/%Y').date()
+        q = q.filter(func.to_date(Cotizacion.fecha, 'DD/MM/YYYY') >= dt_i)
+    if ff:
+        dt_f = datetime.strptime(ff, '%d/%m/%Y').date()
+        q = q.filter(func.to_date(Cotizacion.fecha, 'DD/MM/YYYY') <= dt_f)
+
+    # Filtros restantes
+    if ruc:
+        q = q.filter(Cliente.ruc.like(f'%{ruc}%'))
+    if est:
+        q = q.filter(Cotizacion.estado == est)
+
+    # Ordenar y paginar
+    pagination = (
+      q.order_by(Cotizacion.id.desc())
+       .paginate(page=page, per_page=per_page, error_out=False)
+    )
+
+    # Serializar
     cotizaciones_data = []
     for cot in pagination.items:
-        # relación SQLAlchemy a Cliente y Usuario
-        cliente = cot.cliente
         usuario = db.session.get(Usuario, cot.creado_por)
-
         cotizaciones_data.append({
-            'id':                 cot.id,
-            'cliente':            cliente.nombre,
-            'ruc':                cliente.ruc,
-            'numero_cotizacion':  cot.id,            # aquí usas el id
-            'fecha':              cot.fecha,         # ya es String
-            'monto':              float(cot.total),  # tu total
-            'moneda':             cot.tipo_cambio,   # tu campo de moneda
-            'estado':             cot.estado,
-            'creado_por':         usuario.nombre_usuario if usuario else 'Desconocido'
+            'id':         cot.id,
+            'cliente':    cot.cliente.nombre,
+            'ruc':        cot.cliente.ruc,
+            'fecha':      cot.fecha,  # sigue siendo string
+            'monto':      float(cot.total),
+            'moneda':     cot.tipo_cambio,
+            'estado':     cot.estado,
+            'creado_por': usuario.nombre_usuario if usuario else 'Desconocido'
         })
 
     return jsonify({
         'cotizaciones':  cotizaciones_data,
         'pagina_actual': pagination.page,
-        'total':         pagination.total,
-        'paginas':       pagination.pages
+        'paginas':       pagination.pages,
+        'total':         pagination.total
     })
 
 @app.route('/transformar_orden_venta/<int:cotizacion_id>', methods=['POST'])
