@@ -22,3 +22,4 @@ sync_staging_to_prod.py
 sync_producto_cotizacion.py
 import_ordenes_venta.py
 import_producto_cotizacion.py
+test_excel.py

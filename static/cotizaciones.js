@@ -282,9 +282,9 @@ function obtenerProductosDeCotizacion() {
   let productos = [];
   $('#orden-venta-lista tr').each(function () {
     const id = $(this).find('td').eq(0).text();
-    const cantidad = parseFloat($(this).find('input').eq(0).val()) || 1;
-    const precioBase = parseFloat($(this).find('td').eq(4).text()) || 0; // Este ya tiene IGV
-    const ganancia = parseFloat($(this).find('input').eq(1).val()) || 0;
+    const cantidad = parseFloat($(this).find('.cant-necesaria').val()) || 1;
+    const precioBase = parseFloat($(this).find('td.precio-soles').text()) || 0; // Este ya tiene IGV
+    const ganancia = parseFloat($(this).find('.margen').val()) || 0;
     const tipo_compra = $(this).find('select').val();
 
     // Aplicar margen pero SIN quitar IGV (el precio base ya lo incluye)

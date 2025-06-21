@@ -1643,32 +1643,30 @@ def crear_lista_deseos_con_items():
 def items_deseo_pendientes():
     pendientes = (
         db.session.query(ItemDeseo)
-        .filter(ItemDeseo.estado_item == 'Pendiente')           # <-- aquí
+        .filter(ItemDeseo.estado_item == 'Pendiente')
         .join(ListaDeseos, ListaDeseos.id == ItemDeseo.lista_deseos_id)
-        .filter(ListaDeseos.estado == 'Abierto')                # opcional: solo listas abiertas
+        .filter(ListaDeseos.estado == 'Abierto')
         .all()
     )
 
     out = []
     for item in pendientes:
         lista  = item.lista_deseos
-        cliente_nombre = lista.cliente.nombre
-        if item.producto:
-            nombre = item.producto.nombre
-            stock  = item.producto.stock
-        else:
-            nombre = item.nombre_preproducto
-            stock  = None
+        prod   = item.producto
+        nombre = prod.nombre if prod else item.nombre_preproducto
+        stock  = prod.stock  if prod else None
+        precio = float(prod.precio) if prod else 0.0    # ← aquí tomamos el precio del producto
 
         out.append({
             'item_deseo_id':     item.id,
             'lista_id':          lista.id,
-            'cliente':           cliente_nombre,
-            'nombre_lista':      f"Lista #{lista.id} – {cliente_nombre}",
+            'cliente':           lista.cliente.nombre,
+            'nombre_lista':      f"Lista #{lista.id} – {lista.cliente.nombre}",
             'nombre_producto':   nombre,
             'stock_disponible':  stock,
             'cantidad_necesaria':item.cantidad_necesaria,
-            'precio_referencia': item.precio_referencia
+            'precio_referencia': item.precio_referencia,
+            'precio':            precio       # ← nueva clave
         })
 
     return jsonify(out), 200

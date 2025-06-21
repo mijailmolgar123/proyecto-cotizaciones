@@ -32,8 +32,9 @@ function renderItemsPendientes() {
             <td>${item.nombre_producto}</td>
             <td>${item.stock_disponible}</td>
             <td>${item.cantidad_necesaria}</td>
+            <td>${parseFloat(item.precio).toFixed(2)}</td> 
             <td>
-                <button class="btn btn-primary" onclick="agregarAFormularioCotizacion(${item.item_deseo_id}, '${item.nombre_producto}', ${item.stock_disponible}, ${item.cantidad_necesaria})">Agregar</button>
+                <button class="btn btn-primary" onclick="agregarAFormularioCotizacion(${item.item_deseo_id}, '${item.nombre_producto}', ${item.stock_disponible}, ${item.cantidad_necesaria}, ${parseFloat(item.precio).toFixed(2)})">Agregar</button>
             </td>
         </tr>`;
         tbody.append(row);
@@ -41,30 +42,29 @@ function renderItemsPendientes() {
 }
 
 // 2. Agregar un ítem al array itemsCotizacion
-function agregarAFormularioCotizacion(id, nombre, stock, necesario) {
-    if (!id || !nombre) {
-        console.error("Error: El producto no tiene datos válidos.");
-        return;
-    }
+// cambia la firma para recibir precioReferencia
+function agregarAFormularioCotizacion(id, nombre, stock, necesario, precioReferencia = 0) {
+  if (!id || !nombre) {
+    console.error("Error: El producto no tiene datos válidos.");
+    return;
+  }
 
-    // Ver si ya lo agregaste
-    let existe = itemsCotizacion.find(item => item.item_deseo_id === id);
-    if (existe) {
-        alert("Este producto ya está en la cotización.");
-        return;
-    }
+  // Evita duplicados
+  if (itemsCotizacion.some(item => item.item_deseo_id === id)) {
+    alert("Este producto ya está en la cotización.");
+    return;
+  }
 
-    // Agregar al array local
-    itemsCotizacion.push({
-        item_deseo_id: id,
-        nombre_producto: nombre,
-        stockDisponible: stock,
-        cantidad: necesario,
-        precio_ofrecido: 0
-    });
+  // Agrega al array con el precioOfrecido por defecto
+  itemsCotizacion.push({
+    item_deseo_id:    id,
+    nombre_producto:  nombre,
+    stock_disponible: stock,
+    cantidad:         necesario,
+    precio_ofrecido:  parseFloat(precioReferencia) || 0
+  });
 
-    // Renderiza tabla usando itemsCotizacion
-    renderCotizacionItems();
+  renderCotizacionItems();
 }
 
 // 3. Renderizar la tabla de la derecha
